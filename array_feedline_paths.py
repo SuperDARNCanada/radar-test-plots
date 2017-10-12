@@ -12,27 +12,44 @@ import time
 import math
 import numpy as np
 import matplotlib.pyplot as plt
-
+import json
 # General variables to change depending on data being used
-radar_name = 'Inuvik'
-data_location = '/home/shared/Sync/Sites/Inuvik/Trips/2017/Datasets/'
-plot_location = '/home/shared/Sync/Sites/Inuvik/Trips/2017/Data_Analysis/Plots/'
-number_of_data_points = 801
-vswr_main_files = {1: '0702.csv', 2: '0703.csv', 3: '0704.csv', 4: '0705.csv', 5: '0706.csv',
-                   6: '0707.csv', 7: '0708.csv', 8: '0709.csv', 9: '0710.csv', 10: '0711.csv',
-                   11: '0712.csv', 12: '0713.csv', 13: '0714.csv', 14: '0715.csv', 15: '0716.csv',
-                   16: '0717.csv'}
-vswr_intf_files = {1: '0718.csv', 2: '0719.csv', 3: '0720.csv', 4: '0721.csv'}
-S12_arrays_plot_title = radar_name + ' Combined Main and IF Arrays \nAntenna/Feedlines'
+radar_name = sys.argv[1]
+data_location = sys.argv[2]
+plot_location = sys.argv[3]
+vswr_main_files_str = sys.argv[4]
+vswr_intf_files_str = sys.argv[5]
 
+S12_arrays_plot_title = radar_name + ' Combined Main and IF Arrays \nAntenna/Feedlines'
 data_description = 'This data was taken on site visits in August 2017.'
+
+number_of_data_points = 801
+
+sys.path.append(data_location)
+
+with open(vswr_main_files_str) as f:
+    vswr_main_files = json.load(f)
+    #converting string keys to int keys
+    for k in vswr_main_files.keys():
+        vswr_main_files[int(k)] = vswr_main_files[k]
+        del vswr_main_files[k]
+
+with open(vswr_intf_files_str) as f:
+    vswr_intf_files = json.load(f)
+    #converting string keys to int keys
+    for k in vswr_intf_files.keys():
+        vswr_intf_files[int(k)] = vswr_intf_files[k]
+        del vswr_intf_files[k]
+
+
+
 
 # if we assume S12 and S21 are the same (safe for feedlines/antennas only)
 # We can assume that S21 phase is S11 phase/2
 # We can assume that the transmitted power T12 will be equal to (incident power - cable losses on
 # incident)- (S11 (reflected power) + cable losses on reflect)
 
-sys.path.append(data_location)
+
 
 # estimated cable losses (LMR-400) @ 0.7 db/100ft * 600ft
 cable_loss = 3.5  # in dB
