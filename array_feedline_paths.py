@@ -154,11 +154,9 @@ def main():
 
                 receive_power = transmission - cable_loss  # power incoming from antenna will have mismatch point and then cable losses.
                 receive_power = round(receive_power, 5)
-                # receive_power=-return_loss
                 # convert S11 phase offset into a single direction (/2)
                 data.append((freq, receive_power, float(phase) / 2))
-                # time.sleep(1)
-                # print main_data[i][ln-46]['freq']
+
             data = np.array(data,dtype=[('freq', 'i4'),('receive_power', 'f4'),('phase', 'f4')])
             intf_data[k] = data
 
@@ -172,52 +170,43 @@ def main():
         # now we have data points at same frequencies.
         # next - sum signals.
         number_of_data_points = len(array_dict[1])
-        # combined_array = np.zeros(number_of_data_points, dtype=[('freq', 'i4'), ('receive_power', 'f4'), ('phase', 'f4')])
 
-        # for data in array_dict[1]:
-        #     combined_array[i]['phase'] = array_dict[1][i]['phase']
-        #     combined_array[i]['freq'] = array_dict[1][i]['freq']
-        #     combined_array[i]['receive_power'] = array_dict[1][i]['receive_power']
         combined_array = np.copy(array_dict[1])
 
-        for ant in array_dict.keys():
-            print ant
-            if ant == 1:
+        for k,v in array_dict.iteritems():
+            print k
+            if k == 1:
                 continue  # skip, do not add
-            for i in range(0, number_of_data_points):
-                if combined_array[i]['freq'] != array_dict[ant][i]['freq']:
+            for c,a in zip(combined_array,v):
+                if c['freq'] != a['freq']:
                     errmsg = "Frequencies not Equal"
                     sys.exit(errmsg)
-                phase_rads1 = -((2 * math.pi * combined_array[i]['phase'] / 360) % (
-                2 * math.pi))  # convert to rads - negative because we are using proof using cos(x-A)
-                phase_rads2 = -((2 * math.pi * array_dict[ant][i]['phase'] / 360) % (2 * math.pi))
-                amplitude_1 = 10 ** (
-                combined_array[i]['receive_power'] / 20)  # we want voltage amplitude so use /20
-                amplitude_2 = 10 ** (array_dict[ant][i]['receive_power'] / 20)
+
+                # convert to rads - negative because we are using proof using cos(x-A)
+                phase_rads1 = -((2 * math.pi * c['phase'] / 360) % (2 * math.pi))
+                phase_rads2 = -((2 * math.pi * a['phase'] / 360) % (2 * math.pi))
+
+                # we want voltage amplitude so use /20
+                amplitude_1 = 10 ** (c['receive_power'] / 20)
+                amplitude_2 = 10 ** (a['receive_power'] / 20)
+
                 combined_amp_squared = (
                 amplitude_1 ** 2 + amplitude_2 ** 2 + 2 * amplitude_1 * amplitude_2 * math.cos(
                     phase_rads1 - phase_rads2))
                 combined_amp = math.sqrt(combined_amp_squared)
-                combined_array[i]['receive_power'] = 20 * math.log(combined_amp,
-                                                               10)  # we based it on amplitude of 1 at each antenna.
+
+                # we based it on amplitude of 1 at each antenna.
+                c['receive_power'] = 20 * math.log(combined_amp,10)
                 combined_phase = math.atan2(
                     amplitude_1 * math.sin(phase_rads1) + amplitude_2 * math.sin(phase_rads2),
                     amplitude_1 * math.cos(phase_rads1) + amplitude_2 * math.cos(phase_rads2))
-                combined_array[i]['phase'] = -combined_phase * 360 / (
-                2 * math.pi)  # this is negative so make it positive cos(x-theta)
+
+                # this is negative so make it positive cos(x-theta)
+                c['phase'] = -combined_phase * 360 / (2 * math.pi)
         return combined_array
 
     combined_main_array = combine_arrays(main_data)
     combined_intf_array = combine_arrays(intf_data)
-
-    # now compute difference between the arrays in phase due to antennas/feedlines disparity.
-    # array_diff = np.zeros((len(combined_intf_array),), dtype=[('freq', 'i4'), ('receive_power', 'f4'), ('phase', 'f4')])
-    # for i in range(0, len(combined_intf_array)):
-    #     array_diff[i]['freq'] = combined_intf_array[i]['freq']
-    #     array_diff[i]['phase'] = ((combined_main_array[i]['phase'] - combined_intf_array[i]['phase']) % 360)
-    #     if array_diff[i]['phase'] > 180:
-    #         array_diff[i]['phase'] = -360 + array_diff[i]['phase']
-
 
     array_diff = []
     for m,i in zip(combined_main_array,combined_intf_array):
