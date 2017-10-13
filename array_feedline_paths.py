@@ -138,45 +138,6 @@ def main():
                 VSWR = float(row[1])
                 phase = float(row[2])
 
-            # lines = csvfile.readlines()
-            # for ln in lines:
-            #     if ln.find('Freq. [Hz]') != -1:  # found the right line
-            #         header_line = ln
-            #         break
-            # find_phase = header_line.split(",", 16)
-            # print i
-            # # print find_phase
-            # freq_column = find_phase.index('Freq. [Hz]')
-            # vswr_column = find_phase.index('VSWR [(VSWR)]')
-            # phase_value = 'Phase [\xb0]'
-            # try:
-            #     phase_column = find_phase.index(phase_value)
-            # except ValueError:
-            #     phase_value = 'Phase [\xef\xbf\xbd]'
-            #     phase_column = find_phase.index(phase_value)
-            # it = 0
-            # while (abs(vswr_column - freq_column) > 2) or (abs(phase_column - freq_column) > 2):
-            #     # data is from different sweeps (not the first sweep)
-            #     find_phase.remove('')
-            #     find_phase.remove(find_phase[2])
-            #     find_phase.remove(find_phase[1])
-            #     find_phase.remove(find_phase[0])
-            #     # print find_phase
-            #     it = it + 1
-            #     freq_column = find_phase.index('Freq. [Hz]') + 4 * it
-            #     vswr_column = find_phase.index('VSWR [(VSWR)]') + 4 * it
-            #     phase_column = find_phase.index(phase_value) + 4 * it
-            # # print freq_column, vswr_column, phase_column
-            # intf_data[i] = np.zeros((len(lines) - 46,),
-            #                         dtype=[('freq', 'i4'), ('receive_power', 'f4'),
-            #                                ('phase', 'f4')])
-            # for ln in range(lines.index(header_line) + 1, lines.index(header_line) + number_of_data_points + 1):
-            #     data = lines[ln].split(",", 16)
-            #     # if ln==lines.index(header_line)+1:
-            #     #    print data
-            #     # only taking first sweep data (columns 1-3)
-            #     # print data[vswr_column]
-            #     VSWR = float(data[vswr_column])
                 return_loss = 20 * math.log(((VSWR + 1) / (VSWR - 1)), 10)
                 # calculate mismatch error. need to adjust power base to power at antenna mismatch.
                 power_outgoing = 10 ** (-cable_loss / 10)  # ratio to 1.
@@ -199,77 +160,131 @@ def main():
                 # print main_data[i][ln-46]['freq']
             intf_data[k] = data
 
-    # now we have data points at same frequencies.
-    # next - sum signals.
-    number_of_data_points = len(main_data[1])
-    combined_main_array = np.zeros(number_of_data_points, dtype=[('freq', 'i4'), ('receive_power', 'f4'), ('phase', 'f4')])
-    for i in range(0, number_of_data_points):
-        combined_main_array[i]['phase'] = main_data[1][i]['phase']
-        combined_main_array[i]['freq'] = main_data[1][i]['freq']
-        combined_main_array[i]['receive_power'] = main_data[1][i]['receive_power']
+    def combine_arrays(array_dict):
+        for k,v in array_dict.iteritems():
+            for a,b in zip(array_dict[1],v):
+                if a['freq'] != b['freq']:
+                    errmsg = "Frequencies not Equal"
+                    sys.exit(errmsg)
 
-    for ant in main_data.keys():
-        print ant
-        if ant == 1:
-            continue  # skip, do not add
+        # now we have data points at same frequencies.
+        # next - sum signals.
+        number_of_data_points = len(array_dict[1])
+        combined_array = np.zeros(number_of_data_points, dtype=[('freq', 'i4'), ('receive_power', 'f4'), ('phase', 'f4')])
         for i in range(0, number_of_data_points):
-            if combined_main_array[i]['freq'] != main_data[ant][i]['freq']:
-                errmsg = "Frequencies not Equal"
-                sys.exit(errmsg)
-            phase_rads1 = -((2 * math.pi * combined_main_array[i]['phase'] / 360) % (
-            2 * math.pi))  # convert to rads - negative because we are using proof using cos(x-A)
-            phase_rads2 = -((2 * math.pi * main_data[ant][i]['phase'] / 360) % (2 * math.pi))
-            amplitude_1 = 10 ** (
-            combined_main_array[i]['receive_power'] / 20)  # we want voltage amplitude so use /20
-            amplitude_2 = 10 ** (main_data[ant][i]['receive_power'] / 20)
-            # print amplitude_2
-            combined_amp_squared = (
-            amplitude_1 ** 2 + amplitude_2 ** 2 + 2 * amplitude_1 * amplitude_2 * math.cos(
-                phase_rads1 - phase_rads2))
-            combined_amp = math.sqrt(combined_amp_squared)
-            combined_main_array[i]['receive_power'] = 20 * math.log(combined_amp,
-                                                           10)  # we based it on amplitude of 1 at each antenna.
-            combined_phase = math.atan2(
-                amplitude_1 * math.sin(phase_rads1) + amplitude_2 * math.sin(phase_rads2),
-                amplitude_1 * math.cos(phase_rads1) + amplitude_2 * math.cos(phase_rads2))
-            combined_main_array[i]['phase'] = -combined_phase * 360 / (
-            2 * math.pi)  # this is negative so make it positive cos(x-theta)
-            # print combined_amp
-            # print combined_main_array[3]['receive_power']
+            combined_array[i]['phase'] = array_dict[1][i]['phase']
+            combined_array[i]['freq'] = array_dict[1][i]['freq']
+            combined_array[i]['receive_power'] = array_dict[1][i]['receive_power']
 
-    # do the same for the interferometer array.
-    combined_intf_array = np.zeros((number_of_data_points,), dtype=[('freq', 'i4'), ('receive_power', 'f4'), ('phase', 'f4')])
-    print len(intf_data[1])
-    for i in range(0, number_of_data_points):
-        combined_intf_array[i]['phase'] = intf_data[1][i]['phase']
-        combined_intf_array[i]['freq'] = intf_data[1][i]['freq']
-        combined_intf_array[i]['receive_power'] = intf_data[1][i]['receive_power']
-
-    for ant in intf_data.keys():
-        if ant == 1:
-            continue  # skip, do not add
-        for i in range(0, number_of_data_points):
-            if combined_intf_array[i]['freq'] != intf_data[ant][i]['freq']:
-                errmsg = "Frequencies not Equal"
-                sys.exit(errmsg)
-            phase_rads1 = -((2 * math.pi * combined_intf_array[i]['phase'] / 360) % (
-            2 * math.pi))  # will be in rads already.
-            phase_rads2 = -((2 * math.pi * intf_data[ant][i]['phase'] / 360) % (2 * math.pi))
-            amplitude_1 = 10 ** (combined_intf_array[i]['receive_power'] / 20)
-            amplitude_2 = 10 ** (intf_data[ant][i]['receive_power'] / 20)
-            combined_amp = math.sqrt(
+        for ant in array_dict.keys():
+            print ant
+            if ant == 1:
+                continue  # skip, do not add
+            for i in range(0, number_of_data_points):
+                if combined_array[i]['freq'] != array_dict[ant][i]['freq']:
+                    errmsg = "Frequencies not Equal"
+                    sys.exit(errmsg)
+                phase_rads1 = -((2 * math.pi * combined_array[i]['phase'] / 360) % (
+                2 * math.pi))  # convert to rads - negative because we are using proof using cos(x-A)
+                phase_rads2 = -((2 * math.pi * array_dict[ant][i]['phase'] / 360) % (2 * math.pi))
+                amplitude_1 = 10 ** (
+                combined_array[i]['receive_power'] / 20)  # we want voltage amplitude so use /20
+                amplitude_2 = 10 ** (array_dict[ant][i]['receive_power'] / 20)
+                # print amplitude_2
+                combined_amp_squared = (
                 amplitude_1 ** 2 + amplitude_2 ** 2 + 2 * amplitude_1 * amplitude_2 * math.cos(
                     phase_rads1 - phase_rads2))
-            combined_intf_array[i]['receive_power'] = 20 * math.log(combined_amp,
-                                                           10)  # we based it on amplitude of 1 at each antenna.
-            combined_phase = math.atan2(
-                amplitude_1 * math.sin(phase_rads1) + amplitude_2 * math.sin(phase_rads2),
-                amplitude_1 * math.cos(phase_rads1) + amplitude_2 * math.cos(phase_rads2))
-            combined_intf_array[i]['phase'] = -combined_phase * 360 / (2 * math.pi)
+                combined_amp = math.sqrt(combined_amp_squared)
+                combined_array[i]['receive_power'] = 20 * math.log(combined_amp,
+                                                               10)  # we based it on amplitude of 1 at each antenna.
+                combined_phase = math.atan2(
+                    amplitude_1 * math.sin(phase_rads1) + amplitude_2 * math.sin(phase_rads2),
+                    amplitude_1 * math.cos(phase_rads1) + amplitude_2 * math.cos(phase_rads2))
+                combined_array[i]['phase'] = -combined_phase * 360 / (
+                2 * math.pi)  # this is negative so make it positive cos(x-theta)
+                # print combined_amp
+                # print combined_main_array[3]['receive_power']
+        return combined_array
+
+    # for k,v in main_data.iteritems():
+    #     for a,b in zip(main_data[1],v):
+    #         if a['freq'] != b['freq']:
+    #             errmsg = "Frequencies not Equal"
+    #             sys.exit(errmsg)
+
+    # # now we have data points at same frequencies.
+    # # next - sum signals.
+    # number_of_data_points = len(main_data[1])
+    # combined_main_array = np.zeros(number_of_data_points, dtype=[('freq', 'i4'), ('receive_power', 'f4'), ('phase', 'f4')])
+    # for i in range(0, number_of_data_points):
+    #     combined_main_array[i]['phase'] = main_data[1][i]['phase']
+    #     combined_main_array[i]['freq'] = main_data[1][i]['freq']
+    #     combined_main_array[i]['receive_power'] = main_data[1][i]['receive_power']
+
+    # for ant in main_data.keys():
+    #     print ant
+    #     if ant == 1:
+    #         continue  # skip, do not add
+    #     for i in range(0, number_of_data_points):
+    #         if combined_main_array[i]['freq'] != main_data[ant][i]['freq']:
+    #             errmsg = "Frequencies not Equal"
+    #             sys.exit(errmsg)
+    #         phase_rads1 = -((2 * math.pi * combined_main_array[i]['phase'] / 360) % (
+    #         2 * math.pi))  # convert to rads - negative because we are using proof using cos(x-A)
+    #         phase_rads2 = -((2 * math.pi * main_data[ant][i]['phase'] / 360) % (2 * math.pi))
+    #         amplitude_1 = 10 ** (
+    #         combined_main_array[i]['receive_power'] / 20)  # we want voltage amplitude so use /20
+    #         amplitude_2 = 10 ** (main_data[ant][i]['receive_power'] / 20)
+    #         # print amplitude_2
+    #         combined_amp_squared = (
+    #         amplitude_1 ** 2 + amplitude_2 ** 2 + 2 * amplitude_1 * amplitude_2 * math.cos(
+    #             phase_rads1 - phase_rads2))
+    #         combined_amp = math.sqrt(combined_amp_squared)
+    #         combined_main_array[i]['receive_power'] = 20 * math.log(combined_amp,
+    #                                                        10)  # we based it on amplitude of 1 at each antenna.
+    #         combined_phase = math.atan2(
+    #             amplitude_1 * math.sin(phase_rads1) + amplitude_2 * math.sin(phase_rads2),
+    #             amplitude_1 * math.cos(phase_rads1) + amplitude_2 * math.cos(phase_rads2))
+    #         combined_main_array[i]['phase'] = -combined_phase * 360 / (
+    #         2 * math.pi)  # this is negative so make it positive cos(x-theta)
+    #         # print combined_amp
+    #         # print combined_main_array[3]['receive_power']
+
+    # # do the same for the interferometer array.
+    # combined_intf_array = np.zeros((number_of_data_points,), dtype=[('freq', 'i4'), ('receive_power', 'f4'), ('phase', 'f4')])
+    # print len(intf_data[1])
+    # for i in range(0, number_of_data_points):
+    #     combined_intf_array[i]['phase'] = intf_data[1][i]['phase']
+    #     combined_intf_array[i]['freq'] = intf_data[1][i]['freq']
+    #     combined_intf_array[i]['receive_power'] = intf_data[1][i]['receive_power']
+
+    # for ant in intf_data.keys():
+    #     if ant == 1:
+    #         continue  # skip, do not add
+    #     for i in range(0, number_of_data_points):
+    #         if combined_intf_array[i]['freq'] != intf_data[ant][i]['freq']:
+    #             errmsg = "Frequencies not Equal"
+    #             sys.exit(errmsg)
+    #         phase_rads1 = -((2 * math.pi * combined_intf_array[i]['phase'] / 360) % (
+    #         2 * math.pi))  # will be in rads already.
+    #         phase_rads2 = -((2 * math.pi * intf_data[ant][i]['phase'] / 360) % (2 * math.pi))
+    #         amplitude_1 = 10 ** (combined_intf_array[i]['receive_power'] / 20)
+    #         amplitude_2 = 10 ** (intf_data[ant][i]['receive_power'] / 20)
+    #         combined_amp = math.sqrt(
+    #             amplitude_1 ** 2 + amplitude_2 ** 2 + 2 * amplitude_1 * amplitude_2 * math.cos(
+    #                 phase_rads1 - phase_rads2))
+    #         combined_intf_array[i]['receive_power'] = 20 * math.log(combined_amp,
+    #                                                        10)  # we based it on amplitude of 1 at each antenna.
+    #         combined_phase = math.atan2(
+    #             amplitude_1 * math.sin(phase_rads1) + amplitude_2 * math.sin(phase_rads2),
+    #             amplitude_1 * math.cos(phase_rads1) + amplitude_2 * math.cos(phase_rads2))
+    #         combined_intf_array[i]['phase'] = -combined_phase * 360 / (2 * math.pi)
+    combined_main_array = combine_arrays(main_data)
+    combined_intf_array = combine_arrays(intf_data)
 
     # now compute difference between the arrays in phase due to antennas/feedlines disparity.
-    array_diff = np.zeros((number_of_data_points,), dtype=[('freq', 'i4'), ('receive_power', 'f4'), ('phase', 'f4')])
-    for i in range(0, number_of_data_points):
+    array_diff = np.zeros((len(combined_intf_array),), dtype=[('freq', 'i4'), ('receive_power', 'f4'), ('phase', 'f4')])
+    for i in range(0, len(combined_intf_array)):
         array_diff[i]['freq'] = combined_intf_array[i]['freq']
         array_diff[i]['phase'] = ((combined_main_array[i]['phase'] - combined_intf_array[i]['phase']) % 360)
         if array_diff[i]['phase'] > 180:
