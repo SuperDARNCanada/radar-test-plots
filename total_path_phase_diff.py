@@ -1,9 +1,15 @@
 #!/usr/bin/python
 
-# Phase_diff.py
-# To measure the phase offset in cables, antennas
-# using S11 phase measurements, can determine S12 phase
-# vs frequency.
+# total_path_phase_diff.py
+# To measure the total phase difference from antenna to
+# Output of phasing matrix in order to compare the main
+# and interferometer arrays. This will allow us to the see
+# the frequency dependence, find the linear best fit and
+# use this to determine a tdiff. This script uses multiple measurements -
+#   1. VSWR from feedline out to antenna
+#   2. transmitter receive paths and cable paths for interferometer paths
+#   3. phasing matrix path - including any cable from the transmitter
+# We will use phase and magnitude data.
 
 import sys
 import time
