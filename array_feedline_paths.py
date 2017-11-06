@@ -22,21 +22,22 @@ plot_location = sys.argv[3]
 vswr_main_files_str = sys.argv[4]
 vswr_intf_files_str = sys.argv[5]
 
+plot_filename = 'antenna-feedlines-S11-difference.png'
 S12_arrays_plot_title = radar_name + ' Combined Main and IF Arrays \nAntenna/Feedlines'
 data_description = 'This data was taken on site visits in August 2017.'
 
 sys.path.append(data_location)
 
-with open(vswr_main_files_str) as f:
+with open(plot_location + vswr_main_files_str) as f:
     vswr_main_files = json.load(f)
-    #converting string keys to int keys
+    # converting string keys to int keys
     for k in vswr_main_files.keys():
         vswr_main_files[int(k)] = vswr_main_files[k]
         del vswr_main_files[k]
 
-with open(vswr_intf_files_str) as f:
+with open(plot_location + vswr_intf_files_str) as f:
     vswr_intf_files = json.load(f)
-    #converting string keys to int keys
+    # converting string keys to int keys
     for k in vswr_intf_files.keys():
         vswr_intf_files[int(k)] = vswr_intf_files[k]
         del vswr_intf_files[k]
@@ -90,6 +91,7 @@ def main():
 
                 return_loss = 20 * math.log(((VSWR + 1) / (VSWR - 1)),
                                             10)  # this is dB measured at instrument.
+                # print "return Loss : {}".format(return_loss)
                 # calculate mismatch error. need to adjust power base to power at antenna mismatch.
                 power_outgoing = 10 ** (-1*cable_loss / 10)  # ratio to 1, approaching the balun point.
                 # taking into account reflections for mismatch at antenna = S11
@@ -98,14 +100,18 @@ def main():
                 reflected_loss = -1*return_loss + cable_loss  # dB, at mismatch point that is reflected.
 
                 returned_power = 10 ** (reflected_loss / 10)
-                if returned_power > power_outgoing:
+
+                reflection_at_balun = power_outgoing - returned_power
+                if reflection_at_balun <= 0:
                     print "Antenna: {}".format(k)
                     print freq
                     print "WRONG"
-                    print returned_power, reflected_loss
-                    print power_outgoing, cable_loss
+                    print "reflection at balun is negative, {}".format(reflection_at_balun)
+                    print "This would suggest your cable loss model is too lossy."
+                    print "Cable loss = {} db".format(cable_loss)
                 try:
                     reflection = 10 * math.log((returned_power / power_outgoing), 10)
+                    reflection_db_at_balun = 10 * math.log(reflection_at_balun, 10)
                     transmission = 10 * math.log((1 - (returned_power / power_outgoing)), 10)
                 except ValueError:
                     reflection = 0
