@@ -34,17 +34,6 @@ sys.path.append(data_location)
 # TODO get date from csv files
 with open(plot_location + vswr_files_str) as f:
     vswr_files = json.load(f)
-    # converting string keys to int keys
-    #for k in vswr_main_files.keys():
-    #    vswr_main_files[int(k)] = vswr_main_files[k]
-    #    del vswr_main_files[k]
-
-#with open(plot_location + vswr_intf_files_str) as f:
-#    vswr_intf_files = json.load(f)
-    # converting string keys to int keys
-    #for k in vswr_intf_files.keys():
-    #    vswr_intf_files[int(k)] = vswr_intf_files[k]
-    #    del vswr_intf_files[k]
 
     all_files = vswr_files
 #
@@ -54,6 +43,41 @@ hex_colors = ['#ff1a1a', '#993300', '#ffff1a', '#666600', '#ff531a', '#cc9900', 
               '#7a7a52', '#004d00', '#33ff33', '#26734d', '#003366', '#33cccc', '#00004d',
               '#5500ff', '#a366ff', '#ff00ff', '#e6005c', '#ffaa80', '#999999']
 hex_dictionary = {'other': '#000000'}
+
+
+def check_frequency_array(dict_of_arrays_with_freq_dtype, min_dataset_length):
+    short_datasets = []
+    long_datasets = {}
+    for ant, dataset in dict_of_arrays_with_freq_dtype.items():
+        if len(dataset) == min_dataset_length:
+            short_datasets.append(ant)
+        else:
+            long_datasets[ant] = len(dataset)
+
+    for ant in short_datasets:
+        for value, entry in enumerate(dict_of_arrays_with_freq_dtype[ant]):
+            if entry['freq'] != dict_of_arrays_with_freq_dtype[short_datasets[0]][value]['freq']:
+                sys.exit('Frequencies do not match in datasets - exiting')
+
+    for ant, length in long_datasets.items():
+        lines_to_delete = []
+        if length % min_dataset_length == 0:
+            integer = length/min_dataset_length
+            for value, entry in enumerate(dict_of_arrays_with_freq_dtype[ant]):
+                if (value-1) % integer != 0:
+                    #print entry['freq']
+                    lines_to_delete.append(value)
+                elif entry['freq'] != dict_of_arrays_with_freq_dtype[short_datasets[0]][(value-1)/integer]['freq']:
+                    sys.exit('Datasets are in multiple lengths but frequency axis '
+                              'values are not the same when divided, length {} broken down to length '
+                              '{}'.format(length, min_dataset_length))
+            dict_of_arrays_with_freq_dtype[ant] = np.delete(dict_of_arrays_with_freq_dtype[ant], lines_to_delete, axis=0)
+        else:
+            sys.exit('Please ensure datasets are the same length and frequency axes '
+                     'are the same, length {} is greater than minimum dataset length '
+                     '{}'.format(length, min_dataset_length))
+    return dict_of_arrays_with_freq_dtype
+
 
 def main():
     missing_data = []
@@ -112,36 +136,7 @@ def main():
             hex_dictionary[ant] = hex_colors[0]
             hex_colors.remove(hex_dictionary[ant])
 
-    short_datasets = []
-    long_datasets = {}
-    for ant, dataset in all_data.items():
-        if len(dataset) == min_dataset_length:
-            short_datasets.append(ant)
-        else:
-            long_datasets[ant] = len(dataset)
-
-    for ant in short_datasets:
-        for value, entry in enumerate(all_data[ant]):
-            if entry['freq'] != all_data[short_datasets[0]][value]['freq']:
-                sys.exit('Frequencies do not match in datasets - exiting')
-
-    for ant, length in long_datasets.items():
-        lines_to_delete = []
-        if length % min_dataset_length == 0:
-            integer = length/min_dataset_length
-            for value, entry in enumerate(all_data[ant]):
-                if (value-1) % integer != 0:
-                    #print entry['freq']
-                    lines_to_delete.append(value)
-                elif entry['freq'] != all_data[short_datasets[0]][(value-1)/integer]['freq']:
-                    sys.exit('Datasets are in multiple lengths but frequency axis '
-                              'values are not the same when divided, length {} broken down to length '
-                              '{}'.format(length, min_dataset_length))
-            all_data[ant] = np.delete(all_data[ant], lines_to_delete, axis=0)
-        else:
-            sys.exit('Please ensure datasets are the same length and frequency axes '
-                     'are the same, length {} is greater than minimum dataset length '
-                     '{}'.format(length, min_dataset_length))
+    all_data = check_frequency_array(all_data, min_dataset_length)
 
     max_phase = list(all_data['M0']['phase'])
     min_phase = list(all_data['M0']['phase'])
@@ -232,6 +227,7 @@ def main():
 
     fig.savefig(plot_location + plot_filename)
     plt.close(fig)
+
 
 if __name__ == main():
     main()

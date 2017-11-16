@@ -9,54 +9,62 @@
 
 import sys
 import time
+import fnmatch
+import random
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy import stats
 import json
 import csv
+
+
 
 # General variables to change depending on data being used
 radar_name = sys.argv[1]
 data_location = sys.argv[2]
 plot_location = sys.argv[3]
-vswr_main_files_str = sys.argv[4]
-vswr_intf_files_str = sys.argv[5]
+vswr_files_str = sys.argv[4]
 
-plot_filename = 'antenna-feedlines-S11-difference.png'
+plot_filename = radar_name + ' antenna-feedlines-S11-difference.png'
 S12_arrays_plot_title = radar_name + ' Combined Main and IF Arrays \nAntenna/Feedlines'
-data_description = 'This data was taken on site visits in August 2017.'
+
+print radar_name, data_location, plot_location, vswr_files_str, plot_filename
 
 sys.path.append(data_location)
 
-with open(plot_location + vswr_main_files_str) as f:
-    vswr_main_files = json.load(f)
-    # converting string keys to int keys
-    for k in vswr_main_files.keys():
-        vswr_main_files[int(k)] = vswr_main_files[k]
-        del vswr_main_files[k]
+with open(plot_location + vswr_files_str) as f:
+    vswr_files = json.load(f)
 
-with open(plot_location + vswr_intf_files_str) as f:
-    vswr_intf_files = json.load(f)
-    # converting string keys to int keys
-    for k in vswr_intf_files.keys():
-        vswr_intf_files[int(k)] = vswr_intf_files[k]
-        del vswr_intf_files[k]
-
-
-
+#
+#
+# A list of 21 colors that will be assigned to antennas to keep plot colors consistent.
+hex_colors = ['#ff1a1a', '#993300', '#ffff1a', '#666600', '#ff531a', '#cc9900', '#99cc00',
+              '#7a7a52', '#004d00', '#33ff33', '#26734d', '#003366', '#33cccc', '#00004d',
+              '#5500ff', '#a366ff', '#ff00ff', '#e6005c', '#ffaa80', '#999999']
+hex_dictionary = {'other': '#000000'}
 
 # if we assume S12 and S21 are the same (safe for feedlines/antennas only)
 # We can assume that S21 phase is S11 phase/2
 # We can assume that the transmitted power T12 will be equal to (incident power - cable losses on
 # incident)- (S11 (reflected power) + cable losses on reflect)
 
-
-
 # estimated cable losses (LMR-400) @ 0.7 db/100ft * 600ft
-cable_loss = 3.5  # in dB
-
-main_data = {}
-intf_data = {}
+if 'Saskatoon' in radar_name or 'sas' in radar_name or 'SAS' in radar_name:
+    cable_loss = 3.0  # in dB
+elif 'Prince George' in radar_name or 'Prince_George' in radar_name or 'pgr' in radar_name or \
+                'PGR' in radar_name:
+    cable_loss = 3.0  # in dB
+elif 'Inuvik' in radar_name or 'inv' in radar_name or 'INV' in radar_name:
+    cable_loss = 2.5  # in dB
+elif 'Rankin Inlet' in radar_name or 'Rankin_Inlet' in radar_name or 'rkn' in radar_name or \
+                'RKN' in radar_name:
+    cable_loss = 2.0  # in dB
+elif 'Clyde River' in radar_name or 'Clyde_River' in radar_name or 'cly' in radar_name or \
+                'CLY' in radar_name:
+    cable_loss = 2.5  # in dB
+else:
+    sys.exit('Not a valid radar name.')
 
 # receive power will be calculated from transmit power losses.
 # transmit S21 = (incident-cable losses)-(S11+cable losses)
@@ -70,179 +78,411 @@ intf_data = {}
 # amplitudes calculated as if all antennas receive the same signal strength at the antenna.
 # Balun mismatch for each individual antenna is estimated here.
 
+
+def combine_arrays(array_dict):
+
+    one_array_key = random.choice(array_dict.keys())
+
+    for k, v in array_dict.iteritems():
+        for a, b in zip(array_dict[one_array_key], v):
+            if a['freq'] != b['freq']:
+                errmsg = "Frequencies not Equal {} {}".format(a['freq'], b['freq'])
+                sys.exit(errmsg)
+
+    # now we have data points at same frequencies.
+    # next - sum signals.
+    #number_of_data_points = len(array_dict[one_array_key])
+
+    combined_array = np.copy(array_dict[one_array_key])
+
+    for k, v in array_dict.iteritems():
+        # print k
+        if k == one_array_key:
+            continue  # skip, do not add
+        for c, a in zip(combined_array, v):
+            if c['freq'] != a['freq']:
+                errmsg = "Frequencies not Equal"
+                sys.exit(errmsg)
+
+            # convert to rads - negative because we are using proof using cos(x-A)
+            phase_rads1 = -(c['phase_rad'] % (2 * math.pi))
+            phase_rads2 = -(a['phase_rad'] % (2 * math.pi))
+
+            # we want voltage amplitude so use /20
+            amplitude_1 = 10 ** (c['receive_power'] / 20)
+            amplitude_2 = 10 ** (a['receive_power'] / 20)
+
+            combined_amp_squared = (
+                amplitude_1 ** 2 + amplitude_2 ** 2 + 2 * amplitude_1 * amplitude_2 * math.cos(
+                    phase_rads1 - phase_rads2))
+            combined_amp = math.sqrt(combined_amp_squared)
+            # we based it on amplitude of 1 at each antenna.
+            c['receive_power'] = 20 * math.log(combined_amp, 10)
+            combined_phase = math.atan2(
+                amplitude_1 * math.sin(phase_rads1) + amplitude_2 * math.sin(phase_rads2),
+                amplitude_1 * math.cos(phase_rads1) + amplitude_2 * math.cos(phase_rads2))
+
+            # this is negative so make it positive cos(x-theta)
+            c['phase_rad'] = -combined_phase
+            c['phase_deg'] = -combined_phase * 360.0 / (2.0 * math.pi)
+
+    # unwrap the phase of the phase_rad array
+    for index, entry in enumerate(combined_array):
+        if index != 0:
+            if entry['phase_rad'] >= (2 * math.pi) + combined_array[index-1]['phase_rad'] - 1.0:  # a couple degrees
+                for new_index in range(index, combined_array.shape[0]):
+                    combined_array[new_index]['phase_rad'] = combined_array[new_index]['phase_rad'] - (2 * math.pi)
+            elif entry['phase_rad'] <= -(2 * math.pi) + combined_array[index-1]['phase_rad'] + 0.40:  # a couple degrees
+                for new_index in range(index, combined_array.shape[0]):
+                    combined_array[new_index]['phase_rad'] = combined_array[new_index]['phase_rad'] + (2 * math.pi)
+    return combined_array
+
+
+def check_frequency_array(dict_of_arrays_with_freq_dtype, min_dataset_length):
+    short_datasets = []
+    long_datasets = {}
+    for ant, dataset in dict_of_arrays_with_freq_dtype.items():
+        if len(dataset) == min_dataset_length:
+            short_datasets.append(ant)
+        else:
+            long_datasets[ant] = len(dataset)
+
+    for ant in short_datasets:
+        for value, entry in enumerate(dict_of_arrays_with_freq_dtype[ant]):
+            if entry['freq'] != dict_of_arrays_with_freq_dtype[short_datasets[0]][value]['freq']:
+                sys.exit('Frequencies do not match in datasets - exiting')
+
+    for ant, length in long_datasets.items():
+        lines_to_delete = []
+        if length % min_dataset_length == 0:
+            integer = length/min_dataset_length
+            for value, entry in enumerate(dict_of_arrays_with_freq_dtype[ant]):
+                if (value-1) % integer != 0:
+                    #print entry['freq']
+                    lines_to_delete.append(value)
+                elif entry['freq'] != dict_of_arrays_with_freq_dtype[short_datasets[0]][(value-1)/integer]['freq']:
+                    sys.exit('Datasets are in multiple lengths but frequency axis '
+                              'values are not the same when divided, length {} broken down to length '
+                              '{}'.format(length, min_dataset_length))
+            dict_of_arrays_with_freq_dtype[ant] = np.delete(dict_of_arrays_with_freq_dtype[ant], lines_to_delete, axis=0)
+        else:
+            sys.exit('Please ensure datasets are the same length and frequency axes '
+                     'are the same, length {} is greater than minimum dataset length '
+                     '{}'.format(length, min_dataset_length))
+
+
+def get_slope_of_phase_in_nano(phase_data, freq_hz):
+    # Freq_hz is list in Hz, phase_data is in rads.
+    # dy = np.diff(dataset['phase_rad']) * -10 ** 9 / dx
+    # np.insert(dy, [0], delay_freq_list, axis=1)
+
+    if len(freq_hz) != len(phase_data):
+        sys.exit('Problem with slope array lengths differ {} {}'.format(len(freq_hz), len(phase_data)))
+
+    freq_data = [i * 2 * math.pi for i in freq_hz]
+
+
+    # for smoother plot
+    dy = []
+    for index, entry in enumerate(phase_data):
+        if index < 3:
+            tslope, intercept, rvalue, pvalue, stderr = stats.linregress(
+                freq_data[:(index + 4)],
+                phase_data[:(index + 4)])
+        elif index >= len(phase_data) - 4:
+            tslope, intercept, rvalue, pvalue, stderr = stats.linregress(
+                freq_data[(index - 3):],
+                phase_data[(index - 3):])
+        else:
+            tslope, intercept, rvalue, pvalue, stderr = stats.linregress(
+                freq_data[(index - 3):(index + 4)],
+                phase_data[(index - 3):(index + 4)])
+        dy.append(tslope * -10 ** 9)
+
+    dy = np.array(dy)
+
+    return dy
+
+
 def main():
+    missing_data = []
     main_data = {}
     intf_data = {}
-    for k,v in vswr_main_files.iteritems():
+    min_dataset_length = 100000  # just a big number
+    for k, v in vswr_files.iteritems():
+        if v == 'dne':
+            missing_data.append(k)
+            continue
         with open(data_location + v, 'r') as csvfile:
-            while not 'Freq. [Hz]' in csvfile.readline(): #skip to header
-                pass
-            next(csvfile) #skip over header
+            for line in csvfile:
+                if fnmatch.fnmatch(line, 'Freq. [Hz*'):  # skip to header
+                    break
+            else:  # no break
+                sys.exit('No Data in file {}'.format(v))
+            row = line.split(',')
+            try:
+                freq_header = 'Freq*'
+                freq_columns = [i for i in range(len(row)) if
+                                fnmatch.fnmatch(row[i], freq_header)]
+                vswr_header = 'VSWR*'
+                vswr_columns = [i for i in range(len(row)) if
+                                fnmatch.fnmatch(row[i], vswr_header)]
+                freq_column = freq_columns[0]
+                vswr_column = vswr_columns[0]
+                phase_header = 'Phase*'
+                phase_columns = [i for i in range(len(row)) if
+                                fnmatch.fnmatch(row[i], phase_header)]
+                phase_column = phase_columns[0]
+                if (abs(vswr_column - freq_column) > 2) or (
+                            abs(phase_column - freq_column) > 2):
+                    sys.exit('Data Phase and VSWR are given from different sweeps - please'
+                                 'check data file so first sweep has SWR and Phase info.')
+            except:
+                sys.exit('Cannot find VSWR data.')
+            next(csvfile)  # skip over header
             csv_reader = csv.reader(csvfile)
 
             data = []
             for row in csv_reader:
                 try:
-                    freq = float(row[0])
+                    freq = float(row[freq_column])
+                    VSWR = float(row[vswr_column])
+                    phase = float(row[phase_column])
                 except:
                     continue
-                VSWR = float(row[1])
-                phase = float(row[2])
 
-                return_loss = 20 * math.log(((VSWR + 1) / (VSWR - 1)),
-                                            10)  # this is dB measured at instrument.
-                # print "return Loss : {}".format(return_loss)
+                return_loss_dB = 20 * math.log(((VSWR + 1) / (VSWR - 1)), 10)
+                # return loss reaching instrument.
                 # calculate mismatch error. need to adjust power base to power at antenna mismatch.
-                power_outgoing = 10 ** (-1*cable_loss / 10)  # ratio to 1, approaching the balun point.
-                # taking into account reflections for mismatch at antenna = S11
-                # get single-direction data by making the power base = power_outgoing (incident at mismatch point at balun).
+                # ratio to 1, approaching the balun point.
+                power_reaching_balun_w = 10 ** (-1*cable_loss / 10)
+                # get single-direction data by making the power base = power_reaching_balun_w
+                # (incident at mismatch point at balun).
 
-                reflected_loss = -1*return_loss + cable_loss  # dB, at mismatch point that is reflected.
+                dB_reflected_at_balun = -1*return_loss_dB + cable_loss
 
-                returned_power = 10 ** (reflected_loss / 10)
+                w_reflected_at_balun = 10 ** (dB_reflected_at_balun / 10)
 
-                reflection_at_balun = power_outgoing - returned_power
-                if reflection_at_balun <= 0:
+                w_transmitted_at_balun = power_reaching_balun_w - w_reflected_at_balun
+                # print "transmitted w at balun is {}".format(w_transmitted_at_balun)
+                if w_transmitted_at_balun <= 0:
+                    print radar_name, vswr_files_str
                     print "Antenna: {}".format(k)
                     print freq
                     print "WRONG"
-                    print "reflection at balun is negative, {}".format(reflection_at_balun)
                     print "This would suggest your cable loss model is too lossy."
                     print "Cable loss = {} db".format(cable_loss)
-                try:
-                    reflection = 10 * math.log((returned_power / power_outgoing), 10)
-                    reflection_db_at_balun = 10 * math.log(reflection_at_balun, 10)
-                    transmission = 10 * math.log((1 - (returned_power / power_outgoing)), 10)
-                except ValueError:
-                    reflection = 0
-                    transmission = -10000
-                # this is single direction reflection at mismatch point, assume this happens on
-                # incoming receives as well at this point (reflection coefficient is same in both directions)
-                # what is the transmitted power through that point then (which is relative the signal incident upon it)?
+                    sys.exit()
+                reflection_dB_at_balun = 10 * math.log((w_reflected_at_balun /
+                                                        power_reaching_balun_w), 10)
+                transmission_dB_at_balun = 10 * math.log(w_transmitted_at_balun /
+                                                         power_reaching_balun_w, 10)
 
-                receive_power = transmission - cable_loss  # power incoming from antenna will have mismatch point and then cable losses.
-                # print "Received Power from Incident at Antenna: {}".format(receive_power)
+                # ASSUMING we have a symmetrical mismatch point at the balun and transmission
+                # S12 = S21.
+                # power incoming from antenna will have mismatch point and then cable losses.
+                receive_power = transmission_dB_at_balun - cable_loss
                 receive_power = round(receive_power, 5)
-                data.append((freq, receive_power, float(phase) / 2))
-            data = np.array(data,dtype=[('freq', 'i4'),('receive_power', 'f4'),('phase', 'f4')])
-            main_data[k] = data
+                phase_rad = (float(phase)/2) * math.pi / 180.0
+                data.append((freq, receive_power, float(phase) / 2, phase_rad))
+            data = np.array(data, dtype=[('freq', 'i4'), ('receive_power', 'f4'),
+                                         ('phase_deg', 'f4'), ('phase_rad', 'f4')])
 
+            if len(data) < min_dataset_length:
+                min_dataset_length = len(data)
 
+            if k[0] == 'M':  # in main files.
+                main_data[k] = data
+            elif k[0] == 'I':  # in intf files
+                intf_data[k] = data
+            else:
+                sys.exit('There is an invalid key {}').format(k)
 
-    for k,v in vswr_intf_files.iteritems():
-        with open(data_location + v, 'r') as csvfile:
-            while not 'Freq. [Hz]' in csvfile.readline(): #skip to header
-                pass
-            next(csvfile) #skip over header
-            csv_reader = csv.reader(csvfile)
+            hex_dictionary[k] = hex_colors[0]
+            hex_colors.remove(hex_dictionary[k])
 
-            data = []
-            for row in csv_reader:
-                try:
-                    freq = float(row[0])
-                except:
-                    continue
-                VSWR = float(row[1])
-                phase = float(row[2])
+    check_frequency_array(main_data, min_dataset_length)
+    check_frequency_array(intf_data, min_dataset_length)
 
-                return_loss = 20 * math.log(((VSWR + 1) / (VSWR - 1)), 10)
-                # calculate mismatch error. need to adjust power base to power at antenna mismatch.
-                power_outgoing = 10 ** (-cable_loss / 10)  # ratio to 1.
-                # taking into account reflections for mismatch at antenna = S11
-                # get single-direction data by making the power base = power_outgoing (incident at mismatch point at balun).
+    all_data = main_data.copy()
+    all_data.update(intf_data)
 
-                reflected_loss = -return_loss + cable_loss  # dB, at mismatch point.
-                returned_power = 10 ** (reflected_loss / 10)
-                reflection = 10 * math.log((returned_power / power_outgoing), 10)
-                # this is single direction reflection at mismatch point, assume this happens on incoming receives as well at this point (reflection coefficient is same in both directions)
-                # what is the transmitted power through that point then, relative to signal incident upon it?
-                transmission = 10 * math.log((1 - (returned_power / power_outgoing)), 10)
-
-                receive_power = transmission - cable_loss  # power incoming from antenna will have mismatch point and then cable losses.
-                receive_power = round(receive_power, 5)
-                # convert S11 phase offset into a single direction (/2)
-                data.append((freq, receive_power, float(phase) / 2))
-
-            data = np.array(data,dtype=[('freq', 'i4'),('receive_power', 'f4'),('phase', 'f4')])
-            intf_data[k] = data
-
-    def combine_arrays(array_dict):
-        for k,v in array_dict.iteritems():
-            for a,b in zip(array_dict[1],v):
-                if a['freq'] != b['freq']:
-                    errmsg = "Frequencies not Equal"
-                    sys.exit(errmsg)
-
-        # now we have data points at same frequencies.
-        # next - sum signals.
-        number_of_data_points = len(array_dict[1])
-
-        combined_array = np.copy(array_dict[1])
-
-        for k,v in array_dict.iteritems():
-            print k
-            if k == 1:
-                continue  # skip, do not add
-            for c,a in zip(combined_array,v):
-                if c['freq'] != a['freq']:
-                    errmsg = "Frequencies not Equal"
-                    sys.exit(errmsg)
-
-                # convert to rads - negative because we are using proof using cos(x-A)
-                phase_rads1 = -((2 * math.pi * c['phase'] / 360) % (2 * math.pi))
-                phase_rads2 = -((2 * math.pi * a['phase'] / 360) % (2 * math.pi))
-
-                # we want voltage amplitude so use /20
-                amplitude_1 = 10 ** (c['receive_power'] / 20)
-                amplitude_2 = 10 ** (a['receive_power'] / 20)
-
-                combined_amp_squared = (
-                amplitude_1 ** 2 + amplitude_2 ** 2 + 2 * amplitude_1 * amplitude_2 * math.cos(
-                    phase_rads1 - phase_rads2))
-                combined_amp = math.sqrt(combined_amp_squared)
-
-                # we based it on amplitude of 1 at each antenna.
-                c['receive_power'] = 20 * math.log(combined_amp,10)
-                combined_phase = math.atan2(
-                    amplitude_1 * math.sin(phase_rads1) + amplitude_2 * math.sin(phase_rads2),
-                    amplitude_1 * math.cos(phase_rads1) + amplitude_2 * math.cos(phase_rads2))
-
-                # this is negative so make it positive cos(x-theta)
-                c['phase'] = -combined_phase * 360 / (2 * math.pi)
-        return combined_array
+    # for each antenna, get the linear fit and plot the offset from linear fit.
+    linear_fit_dict = {}
+    for ant, dataset in all_data.items():
+        slope, intercept, rvalue, pvalue, stderr = stats.linregress(dataset['freq'],
+                                                                    dataset['phase_rad'])
+        linear_fit_dict[ant] = {'slope': slope, 'intercept': intercept, 'rvalue': rvalue,
+                                'pvalue': pvalue, 'stderr': stderr}
+        offset_of_best_fit = []
+        for entry in dataset:
+            best_fit_value = slope * entry['freq'] + intercept
+            offset_of_best_fit.append(entry['phase_rad'] - best_fit_value)
+        linear_fit_dict[ant]['offset_of_best_fit'] = np.array(offset_of_best_fit)
+        linear_fit_dict[ant]['time_delay_ns'] = round(slope / (2 * math.pi), 11) * -10 ** 9
 
     combined_main_array = combine_arrays(main_data)
     combined_intf_array = combine_arrays(intf_data)
 
+    # combined main array slope
+    slope, intercept, rvalue, pvalue, stderr = stats.linregress(combined_main_array['freq'],
+                                                                combined_main_array['phase_rad'])
+    offset_of_best_fit = []
+    for entry in combined_main_array:
+        best_fit_value = slope * entry['freq'] + intercept
+        offset_of_best_fit.append(entry['phase_rad'] - best_fit_value)
+    linear_fit_dict['M_all'] = {'slope': slope, 'intercept': intercept, 'rvalue': rvalue,
+                                'pvalue': pvalue, 'stderr': stderr,
+                                'offset_of_best_fit': np.array(offset_of_best_fit),
+                                'time_delay_ns': round(slope / (2 * math.pi), 11) * -10 ** 9}
+
+    # combined intf array slope
+    slope, intercept, rvalue, pvalue, stderr = stats.linregress(combined_intf_array['freq'],
+                                                                combined_intf_array['phase_rad'])
+    offset_of_best_fit = []
+    for entry in combined_intf_array:
+        best_fit_value = slope * entry['freq'] + intercept
+        offset_of_best_fit.append(entry['phase_rad'] - best_fit_value)
+    linear_fit_dict['I_all'] = {'slope': slope, 'intercept': intercept, 'rvalue': rvalue,
+                                'pvalue': pvalue, 'stderr': stderr,
+                                'offset_of_best_fit': np.array(offset_of_best_fit),
+                                'time_delay_ns': round(slope / (2 * math.pi), 11) * -10 ** 9}
+
+    # compute actual time delay (not line of bestfit) - get derivative.
+    # dx is constant
+    # delay_dict = {}
+    # dx = 2.0 * math.pi * (all_data['M0']['freq'][-1] - all_data['M0']['freq'][0]) / min_dataset_length
+    # #delay_freq_list = [all_data['M0']['freq'][i] + (dx / (4.0 * math.pi)) for i in range(0, len(all_data['M0']['freq']) - 1)]
+    # delay_freq_list = list(all_data['M0']['freq'])
+    # print 'dx = {}'.format(dx)
+    # for ant, dataset in all_data.items():
+    #     #dy = np.diff(dataset['phase_rad']) * -10 ** 9 / dx
+    #     # np.insert(dy, [0], delay_freq_list, axis=1)
+    #
+    #     # for smoother plot
+    #     dy = get_slope_of_phase_in_nano(dataset['phase_rad'], delay_freq_list)
+    #     delay_dict[ant] = dy
+    # delay_dict['M_all'] = get_slope_of_phase_in_nano(combined_main_array['phase_rad'], delay_freq_list)
+    # delay_dict['I_all'] = get_slope_of_phase_in_nano(combined_intf_array['phase_rad'], delay_freq_list)
+
     array_diff = []
-    for m,i in zip(combined_main_array,combined_intf_array):
+    for m, i in zip(combined_main_array, combined_intf_array):
         freq = i['freq']
-        phase = ((m['phase'] - i['phase']) % 360)
+        phase = ((m['phase_deg'] - i['phase_deg']) % 360)
         if phase > 180:
             phase = -360 + phase
-        array_diff.append((freq,phase))
-    array_diff = np.array(array_diff,dtype=[('freq', 'i4'),('phase', 'f4')])
+        array_diff.append((freq, phase))
+    array_diff = np.array(array_diff, dtype=[('freq', 'i4'),('phase_deg', 'f4')])
 
-    # plot the two arrays on the same plot and then plot the difference in phase between the arrays.
-    fig, smpplot = plt.subplots(3, sharex=True)
+
+    # PLOTTING
+
+    numplots = 6
+    fig, smpplot = plt.subplots(numplots, sharex=True, figsize=(18, 24))
     xmin, xmax, ymin, ymax = smpplot[0].axis(xmin=8e6, xmax=20e6)
+    smpplot[numplots - 1].set_xlabel('Frequency (Hz)')
     smpplot[0].set_title(S12_arrays_plot_title)
-    smpplot[0].plot(combined_main_array['freq'], combined_main_array['phase'])
-    smpplot[1].plot(combined_main_array['freq'], combined_main_array['receive_power'])
-    smpplot[0].plot(combined_intf_array['freq'], combined_intf_array['phase'])
-    smpplot[1].plot(combined_intf_array['freq'], combined_intf_array['receive_power'])
-    smpplot[2].set_xlabel('Frequency (Hz)')
+    smpplot[0].plot(combined_main_array['freq'], combined_main_array['phase_deg'],
+                    color=hex_dictionary['M0'], label='Main Array')
+    smpplot[1].plot(combined_main_array['freq'], combined_main_array['receive_power'],
+                    color=hex_dictionary['M0'], label='Main Array')
+    smpplot[0].plot(combined_intf_array['freq'], combined_intf_array['phase_deg'],
+                    color=hex_dictionary['I0'], label='Intf Array')
+    smpplot[1].plot(combined_intf_array['freq'], combined_intf_array['receive_power'],
+                    color = hex_dictionary['I0'], label = 'Intf Array')
+
     smpplot[0].set_ylabel('S12 Phase of\nArrays [degrees]')  # from antenna to feedline end at building.
     smpplot[1].set_ylabel('Combined\nArray [dB]')  # referenced to power at a single antenna
-    smpplot[0].grid()
-    smpplot[1].grid()
+
+    #smpplot_2_twin = smpplot[2].twinx()
+    #smpplot_2_twin.set_ylabel('S12 Perceived Time\nDifference b/w arrays [ns]')
+
+    #smpplot[2].axis(ymin=-180, ymax=180)
+    #smpplot_2_twin.axis(ymin=-50, ymax=50)
+    for plot in range(0, numplots):
+        smpplot[plot].grid()
     print "plotting"
-    smpplot[2].plot(array_diff['freq'], array_diff['phase'])
-    smpplot[2].grid()
-    # smpplot[2].set_title(diff_S12_plot_title)
+    smpplot[2].plot(array_diff['freq'], array_diff['phase_deg'])
+    #smpplot_2_twin.plot(array_diff['freq'], array_diff['phase_deg'] * 10**9 / (array_diff['freq'] * 360.0))
     smpplot[2].set_ylabel('S12 Phase\nDifference Between\nArrays [degrees]')
-    fig.savefig(plot_location + 'antenna-feedlines-difference.png')
+
+    for ant, dataset in all_data.items():
+        if ant[0] == 'M': # plot with main array
+            smpplot[3].plot(dataset['freq'], linear_fit_dict[ant]['offset_of_best_fit'] * 180.0 / math.pi,
+                            label='{}, delay={} ns'.format(ant,
+                                                           linear_fit_dict[ant]['time_delay_ns']),
+                            color=hex_dictionary[ant])
+        elif ant[0] == 'I':
+            smpplot[4].plot(dataset['freq'], linear_fit_dict[ant]['offset_of_best_fit'] * 180.0 / math.pi,
+                            label='{}, delay={} ns'.format(ant,
+                                                           linear_fit_dict[ant]['time_delay_ns']),
+                            color=hex_dictionary[ant])
+    # label='{}, stderr={}, time_delay={} ns'.format(ant,
+    #                              round(linear_fit_dict[ant]['stderr'], 9),
+    #                              linear_fit_dict[ant]['time_delay']),
+
+    smpplot[3].plot(all_data['M0']['freq'], linear_fit_dict['M_all']['offset_of_best_fit'] * 180.0 / math.pi,
+                    color=hex_dictionary['other'], label='Combined Main')  # plot last
+    smpplot[4].plot(all_data['M0']['freq'], linear_fit_dict['I_all']['offset_of_best_fit'] * 180.0 / math.pi,
+                    color=hex_dictionary['other'], label='Combined Intf')  # plot last
+
+
+    smpplot[3].legend(fontsize=10, ncol=4)
+    smpplot[4].legend(fontsize=12)
+    smpplot[3].set_ylabel('S12 Main Phase Offset\n from Own Line of Best\nFit [degrees]')
+    smpplot[4].set_ylabel('S12 Intf Phase Offset\n from Own Line of Best\nFit [degrees]')
+    smpplot[5].set_ylabel('S12 Perceived Time\nDifference b/w arrays\n Based on Phase [ns]')
+    smpplot[5].plot(array_diff['freq'], array_diff['phase_deg'] * 10**9 / (array_diff['freq'] * 360.0))
+
+    # smpplot[5].set_ylabel('Main Array Path Delays (ns)')
+    # smpplot[6].set_ylabel('Intf Array Path Delays (ns)')
+    # for ant, dataset in delay_dict.items():
+    #     #print len(delay_freq_list), dataset.shape
+    #     if ant[0] == 'M':
+    #         if ant != 'M_all':
+    #             smpplot[5].plot(delay_freq_list, dataset, color=hex_dictionary[ant],
+    #                             label='{}'.format(ant))
+    #     else:
+    #         if ant != 'I_all':
+    #             smpplot[6].plot(delay_freq_list, dataset, color=hex_dictionary[ant],
+    #                             label='{}'.format(ant))
+    #
+    # smpplot[5].plot(delay_freq_list, delay_dict['M_all'], color=hex_dictionary['other'],
+    #                             label='Combined Main')  # plot last
+    # smpplot[6].plot(delay_freq_list, delay_dict['I_all'], color=hex_dictionary['other'],
+    #                 label='Combined Intf')
+    # xmin, xmax, ymin, ymax = smpplot[5].axis()
+    # if ymax > 1500:
+    #     smpplot[5].axis(ymax=1500)
+    # if ymin < 0:
+    #     smpplot[5].axis(ymin=0)
+    # xmin, xmax, ymin, ymax = smpplot[6].axis()
+    # if ymax > 1500:
+    #     smpplot[6].axis(ymax=1500)
+    # if ymin < 0:
+    #     smpplot[6].axis(ymin=0)
+
+    #smpplot[5].legend(fontsize=10, ncol=3)
+    #smpplot[6].legend(fontsize=12)
+
+    #smpplot[7].plot(delay_freq_list, delay_dict['M_all'] - delay_dict['I_all'])
+    #smpplot[7].set_ylabel('Time diff b/w arrival\nof Arrays from\nFeedlines Alone (ns)')
+    #xmin, xmax, ymin, ymax = smpplot[7].axis()
+    #if ymax > 1000 or ymin < -1000:
+    #    smpplot[7].axis(ymin=-1000, ymax=1000)
+
+
+
+    if missing_data:  # not empty
+        missing_data_statement = "***MISSING DATA FROM ANTENNA(S) "
+        for element in missing_data:
+            missing_data_statement = missing_data_statement + element + " "
+        print missing_data_statement
+        plt.figtext(0.65, 0.05, missing_data_statement, fontsize=15)
+
+    fig.savefig(plot_location + plot_filename)
     plt.close(fig)
 
 
-main()
+if __name__ == main():
+    main()
