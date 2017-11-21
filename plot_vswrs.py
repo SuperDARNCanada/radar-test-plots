@@ -27,7 +27,6 @@ print radar_name, data_location, plot_location, vswr_files_str, plot_filename
 
 # number_of_data_points = 801
 vswrs_plot_title = radar_name + ' Feedline to Antenna Standing Wave Ratios'
-data_description = 'This data was taken on site visits in August 2017.'
 
 sys.path.append(data_location)
 
@@ -80,10 +79,14 @@ def check_frequency_array(dict_of_arrays_with_freq_dtype, min_dataset_length):
 
 
 def main():
+    data_description = []
     missing_data = []
     all_data = {}
     min_dataset_length = 100000  # won't be this high
     for ant, v in all_files.iteritems():
+        if ant == '_comment':
+            data_description = v
+            continue
         if v == 'dne':
             missing_data.append(ant)
             continue
@@ -224,6 +227,10 @@ def main():
             missing_data_statement = missing_data_statement + element + " "
         print missing_data_statement
         plt.figtext(0.65, 0.05, missing_data_statement, fontsize=15)
+
+    if data_description:
+        print data_description
+        plt.figtext(0.65, 0.10, data_description, fontsize=15)
 
     fig.savefig(plot_location + plot_filename)
     plt.close(fig)
