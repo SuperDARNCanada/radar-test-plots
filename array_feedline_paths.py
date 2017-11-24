@@ -78,6 +78,21 @@ else:
 # Balun mismatch for each individual antenna is estimated here.
 
 
+def unwrap_phase(data):
+    # take a numpy array with phase_deg and phase_rad datatypes and unwrap.
+    if max(data['phase_deg']) < 180.0 and min(data['phase_deg']) > -180.0:
+        # unwrap
+        for num, entry in enumerate(data['phase_deg']):
+            if entry > 355.0 + data['phase_deg'][num - 1]:
+                for i in range(num, len(data)):
+                    data['phase_deg'][i] = data['phase_deg'][i] - 360.0
+                    data['phase_rad'][i] = data['phase_deg'][i] * math.pi / 180.0
+            elif entry < -355.0 + data['phase_deg'][num - 1]:
+                for i in range(num, len(data)):
+                    data['phase_deg'][i] = data['phase_deg'][i] + 360.0
+                    data['phase_rad'][i] = data['phase_deg'][i] * math.pi / 180.0
+
+
 def combine_arrays(array_dict):
 
     one_array_key = random.choice(array_dict.keys())
@@ -125,15 +140,7 @@ def combine_arrays(array_dict):
             c['phase_rad'] = -combined_phase
             c['phase_deg'] = -combined_phase * 360.0 / (2.0 * math.pi)
 
-    # unwrap the phase of the phase_rad array
-    for index, entry in enumerate(combined_array):
-        if index != 0:
-            if entry['phase_rad'] >= (2 * math.pi) + combined_array[index-1]['phase_rad'] - 1.0:  # a couple degrees
-                for new_index in range(index, combined_array.shape[0]):
-                    combined_array[new_index]['phase_rad'] = combined_array[new_index]['phase_rad'] - (2 * math.pi)
-            elif entry['phase_rad'] <= -(2 * math.pi) + combined_array[index-1]['phase_rad'] + 0.40:  # a couple degrees
-                for new_index in range(index, combined_array.shape[0]):
-                    combined_array[new_index]['phase_rad'] = combined_array[new_index]['phase_rad'] + (2 * math.pi)
+    unwrap_phase(combined_array)
     return combined_array
 
 
@@ -291,6 +298,8 @@ def main():
             data = np.array(data, dtype=[('freq', 'i4'), ('receive_power', 'f4'),
                                          ('phase_deg', 'f4'), ('phase_rad', 'f4')])
 
+            unwrap_phase(data)
+
             if len(data) < min_dataset_length:
                 min_dataset_length = len(data)
 
@@ -379,10 +388,8 @@ def main():
     array_diff = np.array(array_diff, dtype=[('freq', 'i4'), ('phase_deg', 'f4'),
                                              ('time_ns', 'f4')])
 
-    # TODO export time_ns
-    if time_file_str != 'None':  # for pre-fix files, for now
-        with open(plot_location + time_file_str, 'w') as time_file:
-            time_file.write(str(array_diff))
+    if time_file_str != 'None':
+        array_diff.tofile(plot_location + time_file_str, sep="\n")
     # PLOTTING
 
     numplots = 6
@@ -390,11 +397,11 @@ def main():
     xmin, xmax, ymin, ymax = smpplot[0].axis(xmin=8e6, xmax=20e6)
     smpplot[numplots - 1].set_xlabel('Frequency (Hz)')
     smpplot[0].set_title(plot_title)
-    smpplot[0].plot(combined_main_array['freq'], combined_main_array['phase_deg'],
+    smpplot[0].plot(combined_main_array['freq'], combined_main_array['phase_deg'] % 360.0,
                     color=hex_dictionary['M0'], label='Main Array')
     smpplot[1].plot(combined_main_array['freq'], combined_main_array['receive_power'],
                     color=hex_dictionary['M0'], label='Main Array')
-    smpplot[0].plot(combined_intf_array['freq'], combined_intf_array['phase_deg'],
+    smpplot[0].plot(combined_intf_array['freq'], combined_intf_array['phase_deg'] % 360.0,
                     color=hex_dictionary['I0'], label='Intf Array')
     smpplot[1].plot(combined_intf_array['freq'], combined_intf_array['receive_power'],
                     color=hex_dictionary['I0'], label='Intf Array')
