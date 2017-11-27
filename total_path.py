@@ -71,6 +71,29 @@ def correct_frequency_array(dict_of_arrays_with_freq_dtype):
 
     new_dict_of_arrays = {}
 
+    for path, array in dict_of_arrays_with_freq_dtype.items():
+        new_dict_of_arrays[path] = np.zeros(len_of_new_arrays, dtype=array.dtype)
+        new_dict_of_arrays[path]['freq'] = reference_frequency_array
+        new_dict_of_arrays[path]['phase_deg'] = np.interp(reference_frequency_array, array['freq'], array['phase_deg'])
+        new_dict_of_arrays[path]['time_ns'] = np.interp(reference_frequency_array, array['freq'], array['time_ns'])
+
+        # array_iterator = 0
+        # for num, freq in enumerate(reference_frequency_array):
+        #     jump = 0
+        #     if freq > array[array_iterator]['freq']:
+        #         while freq > array[array_iterator + jump]['freq']:
+        #             jump += 1
+        #     if freq == array[array_iterator + jump]['freq']:
+        #         new_dict_of_arrays[path][num] = array[array_iterator + jump]
+        #         array_iterator += jump
+        #     elif freq < array[array_iterator + jump]['freq']:
+        #         # interpolate
+        #         if jump == 0:
+        #             sys.exit('interpolation wrong; jump = 0')
+        #         array_iterator += jump - 1
+
+    return new_dict_of_arrays
+
     short_datasets = []
     long_datasets = {}
     for ant, dataset in dict_of_arrays_with_freq_dtype.items():
@@ -153,38 +176,43 @@ def main():
 
     #print data['Feedline-Path']
 
-    total_path = np.zeros(min_dataset_length, dtype=[('freq', 'i4'), ('phase_deg', 'f4'),
+
+
+    data = correct_frequency_array(data)
+
+    total_path = np.zeros(data['Feedline-Path'].shape[0], dtype=[('freq', 'i4'), ('phase_deg', 'f4'),
                                                        ('time_ns', 'f4')])
 
-    correct_frequency_array(data)
-
-    total_path['freq'] = reference_frequency_array
+    total_path['freq'] = data['Feedline-Path']['freq']
     for path, array in data.items():
         total_path['phase_deg'] += array['phase_deg']
         total_path['time_ns'] += array['time_ns']
 
+    for entry in total_path['phase_deg']:
+        if entry > 180:
+            entry = -360 + entry
 
 
-        # PLOTTING
+    # PLOTTING
 
-        numplots = 2
-        fig, smpplot = plt.subplots(numplots, sharex=True, figsize=(18, 24))
-        xmin, xmax, ymin, ymax = smpplot[0].axis(xmin=8e6, xmax=20e6)
-        smpplot[numplots - 1].set_xlabel('Frequency (Hz)')
-        smpplot[0].set_title(plot_title, fontsize=30)
-        smpplot[0].plot(total_path['freq'], total_path['phase_deg'] % 360.0)
-        smpplot[0].set_ylabel('Total Path Phase\nDifference b/w Arrays [degrees]')
-        smpplot[1].plot(total_path['freq'], total_path['time_ns'])
-        smpplot[1].set_ylabel('Total Perceived Time \nDifference b/w Arrays based on Phase [ns]')
-        for plot in range(0, numplots):
-            smpplot[plot].grid()
+    numplots = 2
+    fig, smpplot = plt.subplots(numplots, sharex=True, figsize=(18, 24))
+    xmin, xmax, ymin, ymax = smpplot[0].axis(xmin=8e6, xmax=20e6)
+    smpplot[numplots - 1].set_xlabel('Frequency (Hz)')
+    smpplot[0].set_title(plot_title, fontsize=30)
+    smpplot[0].plot(total_path['freq'], total_path['phase_deg'])
+    smpplot[0].set_ylabel('Total Path Phase\nDifference b/w Arrays [degrees]')
+    smpplot[1].plot(total_path['freq'], total_path['time_ns'])
+    smpplot[1].set_ylabel('Total Perceived Time \nDifference b/w Arrays based on Phase [ns]')
+    for plot in range(0, numplots):
+        smpplot[plot].grid()
 
-        if data_description:
-            print data_description
-            plt.figtext(0.65, 0.04, data_description, fontsize=8)
+    if data_description:
+        print data_description
+        plt.figtext(0.65, 0.04, data_description, fontsize=8)
 
-        fig.savefig(data_location + 'Total-Path/' + plot_filename)
-        plt.close(fig)
+    fig.savefig(data_location + 'Total-Path/' + plot_filename)
+    plt.close(fig)
 
 
 if __name__ == main():

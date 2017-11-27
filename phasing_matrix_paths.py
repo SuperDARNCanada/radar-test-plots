@@ -461,7 +461,7 @@ def main():
         plt.close(fig)
     elif combined_test_data_flag:  # only combined data given
         numplots = 4
-        fig, smpplot = plt.subplots(numplots, sharex=True, figsize=(9, 12))
+        fig, smpplot = plt.subplots(numplots, sharex=True, figsize=(18, 24))
         xmin, xmax, ymin, ymax = smpplot[0].axis(xmin=8e6, xmax=20e6)
         smpplot[numplots - 1].set_xlabel('Frequency (Hz)')
         smpplot[0].set_title(plot_title, fontsize=30)
@@ -528,10 +528,10 @@ def main():
 
     if combined_test_data_flag:
         if time_file_str != 'None':
-            array_diff.tofile(plot_location + time_file_str, sep="\n")
+            array_diff_dict['tested'].tofile(plot_location + time_file_str, sep="\n")
     else:
         if time_file_str != 'None':
-            array_diff.tofile(plot_location + time_file_str, sep="\n")
+            array_diff_dict['calculated'].tofile(plot_location + time_file_str, sep="\n")
 
 if __name__ == main():
     main()
