@@ -373,7 +373,7 @@ def main():
                                                      ('time_ns', 'f4')])
             array_diff_dict['tested'] = array_diff
 
-        unwrap_phase(array_diff_dict['tested'])
+            unwrap_phase(array_diff_dict['tested'])
         # PLOTTING
 
         numplots = 6
