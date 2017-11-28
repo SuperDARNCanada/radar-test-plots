@@ -44,14 +44,16 @@ def unwrap_phase(data):
     if max(data['phase_deg']) < 180.0 and min(data['phase_deg']) > -180.0:
         # unwrap
         for num, entry in enumerate(data['phase_deg']):
-            if entry > 355.0 + data['phase_deg'][num - 1]:
+            if entry > 320.0 + data['phase_deg'][num - 1]:
                 for i in range(num, len(data)):
                     data['phase_deg'][i] = data['phase_deg'][i] - 360.0
-                    data['phase_rad'][i] = data['phase_deg'][i] * math.pi / 180.0
-            elif entry < -355.0 + data['phase_deg'][num - 1]:
+                    if 'phase_rad' in data.dtype.names:
+                        data['phase_rad'][i] = data['phase_deg'][i] * math.pi / 180.0
+            elif entry < -320.0 + data['phase_deg'][num - 1]:
                 for i in range(num, len(data)):
                     data['phase_deg'][i] = data['phase_deg'][i] + 360.0
-                    data['phase_rad'][i] = data['phase_deg'][i] * math.pi / 180.0
+                    if 'phase_rad' in data.dtype.names:
+                        data['phase_rad'][i] = data['phase_deg'][i] * math.pi / 180.0
 
 
 def combine_arrays(array_dict):
@@ -337,7 +339,8 @@ def main():
     array_diff = np.array(array_diff, dtype=[('freq', 'i4'), ('phase_deg', 'f4'),
                                              ('time_ns', 'f4')])
 
-    # TODO export time_ns
+    unwrap_phase(array_diff)
+
     if time_file_str != 'None':
         array_diff.tofile(plot_location + time_file_str, sep="\n")
     # PLOTTING

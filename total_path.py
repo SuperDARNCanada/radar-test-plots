@@ -18,6 +18,7 @@ import csv
 radar_name = sys.argv[1]
 data_location = sys.argv[2]
 path_file_str = sys.argv[3]
+time_file_str = sys.argv[4]
 
 plot_filename = radar_name + ' total-path.png'
 plot_title = radar_name + ' Total Phase Path'
@@ -32,14 +33,16 @@ def unwrap_phase(data):
     if max(data['phase_deg']) < 180.0 and min(data['phase_deg']) > -180.0:
         # unwrap
         for num, entry in enumerate(data['phase_deg']):
-            if entry > 355.0 + data['phase_deg'][num - 1]:
+            if entry > 320.0 + data['phase_deg'][num - 1]:
                 for i in range(num, len(data)):
                     data['phase_deg'][i] = data['phase_deg'][i] - 360.0
-                    data['phase_rad'][i] = data['phase_deg'][i] * math.pi / 180.0
-            elif entry < -355.0 + data['phase_deg'][num - 1]:
+                    if 'phase_rad' in data.dtype.names:
+                        data['phase_rad'][i] = data['phase_deg'][i] * math.pi / 180.0
+            elif entry < -320.0 + data['phase_deg'][num - 1]:
                 for i in range(num, len(data)):
                     data['phase_deg'][i] = data['phase_deg'][i] + 360.0
-                    data['phase_rad'][i] = data['phase_deg'][i] * math.pi / 180.0
+                    if 'phase_rad' in data.dtype.names:
+                        data['phase_rad'][i] = data['phase_deg'][i] * math.pi / 180.0
 
 
 # TODO come up with an interpolation to convert frequency
@@ -213,6 +216,9 @@ def main():
 
     fig.savefig(data_location + 'Total-Path/' + plot_filename)
     plt.close(fig)
+
+    if time_file_str != 'None':
+        total_path.tofile(data_location + time_file_str, sep="\n")
 
 
 if __name__ == main():
