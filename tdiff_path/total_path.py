@@ -45,7 +45,6 @@ def unwrap_phase(data):
                         data['phase_rad'][i] = data['phase_deg'][i] * math.pi / 180.0
 
 
-# TODO come up with an interpolation to convert frequency
 def correct_frequency_array(dict_of_arrays_with_freq_dtype):
 
     # find latest starting frequency
@@ -80,54 +79,7 @@ def correct_frequency_array(dict_of_arrays_with_freq_dtype):
         new_dict_of_arrays[path]['phase_deg'] = np.interp(reference_frequency_array, array['freq'], array['phase_deg'])
         new_dict_of_arrays[path]['time_ns'] = np.interp(reference_frequency_array, array['freq'], array['time_ns'])
 
-        # array_iterator = 0
-        # for num, freq in enumerate(reference_frequency_array):
-        #     jump = 0
-        #     if freq > array[array_iterator]['freq']:
-        #         while freq > array[array_iterator + jump]['freq']:
-        #             jump += 1
-        #     if freq == array[array_iterator + jump]['freq']:
-        #         new_dict_of_arrays[path][num] = array[array_iterator + jump]
-        #         array_iterator += jump
-        #     elif freq < array[array_iterator + jump]['freq']:
-        #         # interpolate
-        #         if jump == 0:
-        #             sys.exit('interpolation wrong; jump = 0')
-        #         array_iterator += jump - 1
-
     return new_dict_of_arrays
-
-    short_datasets = []
-    long_datasets = {}
-    for ant, dataset in dict_of_arrays_with_freq_dtype.items():
-        if len(dataset) == min_dataset_length:
-            short_datasets.append(ant)
-        else:
-            long_datasets[ant] = len(dataset)
-
-    for ant in short_datasets:
-        for value, entry in enumerate(dict_of_arrays_with_freq_dtype[ant]):
-            if entry['freq'] != freqs[value]:
-                print entry['freq'], freqs[value]
-                sys.exit('Frequencies do not match in datasets - exiting')
-
-    for ant, length in long_datasets.items():
-        lines_to_delete = []
-        if length % min_dataset_length == 0:
-            integer = length/min_dataset_length
-            for value, entry in enumerate(dict_of_arrays_with_freq_dtype[ant]):
-                if (value-1) % integer != 0:
-                    #print entry['freq']
-                    lines_to_delete.append(value)
-                elif entry['freq'] != freqs[(value-1)/integer]:
-                    sys.exit('Datasets are in multiple lengths but frequency axis '
-                              'values are not the same when divided, length {} broken down to length '
-                              '{}'.format(length, min_dataset_length))
-            dict_of_arrays_with_freq_dtype[ant] = np.delete(dict_of_arrays_with_freq_dtype[ant], lines_to_delete, axis=0)
-        else:
-            sys.exit('Please ensure datasets are the same length and frequency axes '
-                     'are the same, length {} is greater than minimum dataset length {}'
-                     '{}'.format(length, min_dataset_length, ant))
 
 
 def get_slope_of_phase_in_nano(phase_data, freq_hz):

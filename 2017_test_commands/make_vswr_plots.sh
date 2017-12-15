@@ -1,5 +1,10 @@
 #!/bin/bash
 
+MY_DIR=`dirname "$(readlink -f "$0")"`
+echo $MY_DIR
+cd $MY_DIR
+cd ../tdiff_path/
+
 python ./plot_vswrs.py 'Prince George Post-Fix' /home/shared/Sync/Sites/Prince_George/Trips/2017/site_data/DATA/ /home/shared/Sync/Sites/Prince_George/Trips/2017/site_data/Data_Analysis/VSWRs/ vswr-files-post-work.json
 
 python ./plot_vswrs.py 'Prince George Pre-Fix' /home/shared/Sync/Sites/Prince_George/Trips/2017/site_data/DATA/ /home/shared/Sync/Sites/Prince_George/Trips/2017/site_data/Data_Analysis/VSWRs/ vswr-files-pre-work.json
@@ -16,3 +21,4 @@ python ./plot_vswrs.py 'Rankin Inlet Post-Fix' /home/shared/Sync/Sites/Rankin_In
 
 python ./plot_vswrs.py Saskatoon /home/shared/Sync/Sites/Saskatoon/SITE-VISITS-2017/DATA/ /home/shared/Sync/Sites/Saskatoon/SITE-VISITS-2017/Data_Analysis/VSWRs/ vswr-files.json
 
+python ./plot_reflection.py Saskatoon /home/shared/Sync/Sites/Saskatoon/SITE-VISITS-2017/DATA/20171212/ /home/shared/Sync/Sites/Saskatoon/SITE-VISITS-2017/Data_Analysis/vswrs-tower-base-20171212/ vswr-files.json
