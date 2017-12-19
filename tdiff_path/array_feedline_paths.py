@@ -18,6 +18,8 @@ from scipy import stats
 import json
 import csv
 
+from dataset_operations.dataset_operations import unwrap_phase, check_frequency_array, combine_arrays
+
 # General variables to change depending on data being used
 radar_name = sys.argv[1]
 data_location = sys.argv[2]
@@ -76,140 +78,6 @@ else:
 
 # amplitudes calculated as if all antennas receive the same signal strength at the antenna.
 # Balun mismatch for each individual antenna is estimated here.
-
-
-def unwrap_phase(data):
-    # take a numpy array with phase_deg and phase_rad datatypes and unwrap.
-    if max(data['phase_deg']) < 180.0 and min(data['phase_deg']) > -180.0:
-        # unwrap
-        for num, entry in enumerate(data['phase_deg']):
-            if entry > 320.0 + data['phase_deg'][num - 1]:
-                for i in range(num, len(data)):
-                    data['phase_deg'][i] = data['phase_deg'][i] - 360.0
-                    if 'phase_rad' in data.dtype.names:
-                        data['phase_rad'][i] = data['phase_deg'][i] * math.pi / 180.0
-            elif entry < -320.0 + data['phase_deg'][num - 1]:
-                for i in range(num, len(data)):
-                    data['phase_deg'][i] = data['phase_deg'][i] + 360.0
-                    if 'phase_rad' in data.dtype.names:
-                        data['phase_rad'][i] = data['phase_deg'][i] * math.pi / 180.0
-
-
-def combine_arrays(array_dict):
-
-    one_array_key = random.choice(array_dict.keys())
-
-    for k, v in array_dict.iteritems():
-        for a, b in zip(array_dict[one_array_key], v):
-            if a['freq'] != b['freq']:
-                errmsg = "Frequencies not Equal {} {}".format(a['freq'], b['freq'])
-                sys.exit(errmsg)
-
-    # now we have data points at same frequencies.
-    # next - sum signals.
-    #number_of_data_points = len(array_dict[one_array_key])
-
-    combined_array = np.copy(array_dict[one_array_key])
-
-    for k, v in array_dict.iteritems():
-        # print k
-        if k == one_array_key:
-            continue  # skip, do not add
-        for c, a in zip(combined_array, v):
-            if c['freq'] != a['freq']:
-                errmsg = "Frequencies not Equal"
-                sys.exit(errmsg)
-
-            # convert to rads - negative because we are using proof using cos(x-A)
-            phase_rads1 = -(c['phase_rad'] % (2 * math.pi))
-            phase_rads2 = -(a['phase_rad'] % (2 * math.pi))
-
-            # we want voltage amplitude so use /20
-            amplitude_1 = 10 ** (c['receive_power'] / 20)
-            amplitude_2 = 10 ** (a['receive_power'] / 20)
-
-            combined_amp_squared = (
-                amplitude_1 ** 2 + amplitude_2 ** 2 + 2 * amplitude_1 * amplitude_2 * math.cos(
-                    phase_rads1 - phase_rads2))
-            combined_amp = math.sqrt(combined_amp_squared)
-            # we based it on amplitude of 1 at each antenna.
-            c['receive_power'] = 20 * math.log(combined_amp, 10)
-            combined_phase = math.atan2(
-                amplitude_1 * math.sin(phase_rads1) + amplitude_2 * math.sin(phase_rads2),
-                amplitude_1 * math.cos(phase_rads1) + amplitude_2 * math.cos(phase_rads2))
-
-            # this is negative so make it positive cos(x-theta)
-            c['phase_rad'] = -combined_phase
-            c['phase_deg'] = -combined_phase * 360.0 / (2.0 * math.pi)
-
-    unwrap_phase(combined_array)
-    return combined_array
-
-
-def check_frequency_array(dict_of_arrays_with_freq_dtype, min_dataset_length):
-    short_datasets = []
-    long_datasets = {}
-    for ant, dataset in dict_of_arrays_with_freq_dtype.items():
-        if len(dataset) == min_dataset_length:
-            short_datasets.append(ant)
-        else:
-            long_datasets[ant] = len(dataset)
-
-    for ant in short_datasets:
-        for value, entry in enumerate(dict_of_arrays_with_freq_dtype[ant]):
-            if entry['freq'] != dict_of_arrays_with_freq_dtype[short_datasets[0]][value]['freq']:
-                sys.exit('Frequencies do not match in datasets - exiting')
-
-    for ant, length in long_datasets.items():
-        lines_to_delete = []
-        if length % min_dataset_length == 0:
-            integer = length/min_dataset_length
-            for value, entry in enumerate(dict_of_arrays_with_freq_dtype[ant]):
-                if (value-1) % integer != 0:
-                    #print entry['freq']
-                    lines_to_delete.append(value)
-                elif entry['freq'] != dict_of_arrays_with_freq_dtype[short_datasets[0]][(value-1)/integer]['freq']:
-                    sys.exit('Datasets are in multiple lengths but frequency axis '
-                              'values are not the same when divided, length {} broken down to length '
-                              '{}'.format(length, min_dataset_length))
-            dict_of_arrays_with_freq_dtype[ant] = np.delete(dict_of_arrays_with_freq_dtype[ant], lines_to_delete, axis=0)
-        else:
-            sys.exit('Please ensure datasets are the same length and frequency axes '
-                     'are the same, length {} is greater than minimum dataset length '
-                     '{}'.format(length, min_dataset_length))
-
-
-def get_slope_of_phase_in_nano(phase_data, freq_hz):
-    # Freq_hz is list in Hz, phase_data is in rads.
-    # dy = np.diff(dataset['phase_rad']) * -10 ** 9 / dx
-    # np.insert(dy, [0], delay_freq_list, axis=1)
-
-    if len(freq_hz) != len(phase_data):
-        sys.exit('Problem with slope array lengths differ {} {}'.format(len(freq_hz), len(phase_data)))
-
-    freq_data = [i * 2 * math.pi for i in freq_hz]
-
-
-    # for smoother plot
-    dy = []
-    for index, entry in enumerate(phase_data):
-        if index < 3:
-            tslope, intercept, rvalue, pvalue, stderr = stats.linregress(
-                freq_data[:(index + 4)],
-                phase_data[:(index + 4)])
-        elif index >= len(phase_data) - 4:
-            tslope, intercept, rvalue, pvalue, stderr = stats.linregress(
-                freq_data[(index - 3):],
-                phase_data[(index - 3):])
-        else:
-            tslope, intercept, rvalue, pvalue, stderr = stats.linregress(
-                freq_data[(index - 3):(index + 4)],
-                phase_data[(index - 3):(index + 4)])
-        dy.append(tslope * -10 ** 9)
-
-    dy = np.array(dy)
-
-    return dy
 
 
 def main():
@@ -297,10 +165,10 @@ def main():
                 receive_power = round(receive_power, 5)
                 phase_rad = (float(phase)/2) * math.pi / 180.0
                 data.append((freq, receive_power, float(phase) / 2, phase_rad))
-            data = np.array(data, dtype=[('freq', 'i4'), ('receive_power', 'f4'),
+            data = np.array(data, dtype=[('freq', 'i4'), ('magnitude', 'f4'),
                                          ('phase_deg', 'f4'), ('phase_rad', 'f4')])
 
-            unwrap_phase(data)
+            data = unwrap_phase(data)
 
             if len(data) < min_dataset_length:
                 min_dataset_length = len(data)
@@ -362,21 +230,6 @@ def main():
                                 'offset_of_best_fit': np.array(offset_of_best_fit),
                                 'time_delay_ns': round(slope / (2 * math.pi), 11) * -10 ** 9}
 
-    # dx is constant
-    # delay_dict = {}
-    # dx = 2.0 * math.pi * (all_data['M0']['freq'][-1] - all_data['M0']['freq'][0]) / min_dataset_length
-    # #delay_freq_list = [all_data['M0']['freq'][i] + (dx / (4.0 * math.pi)) for i in range(0, len(all_data['M0']['freq']) - 1)]
-    # delay_freq_list = list(all_data['M0']['freq'])
-    # print 'dx = {}'.format(dx)
-    # for ant, dataset in all_data.items():
-    #     #dy = np.diff(dataset['phase_rad']) * -10 ** 9 / dx
-    #     # np.insert(dy, [0], delay_freq_list, axis=1)
-    #
-    #     # for smoother plot
-    #     dy = get_slope_of_phase_in_nano(dataset['phase_rad'], delay_freq_list)
-    #     delay_dict[ant] = dy
-    # delay_dict['M_all'] = get_slope_of_phase_in_nano(combined_main_array['phase_rad'], delay_freq_list)
-    # delay_dict['I_all'] = get_slope_of_phase_in_nano(combined_intf_array['phase_rad'], delay_freq_list)
 
     array_diff = []
     for m, i in zip(combined_main_array, combined_intf_array):
@@ -389,7 +242,7 @@ def main():
     array_diff = np.array(array_diff, dtype=[('freq', 'i4'), ('phase_deg', 'f4'),
                                              ('time_ns', 'f4')])
 
-    unwrap_phase(array_diff)
+    array_diff = unwrap_phase(array_diff)
 
     if time_file_str != 'None':
         array_diff.tofile(plot_location + time_file_str, sep="\n")
@@ -402,11 +255,11 @@ def main():
     smpplot[0].set_title(plot_title)
     smpplot[0].plot(combined_main_array['freq'], combined_main_array['phase_deg'] % 360.0,
                     color=hex_dictionary['M0'], label='Main Array')
-    smpplot[1].plot(combined_main_array['freq'], combined_main_array['receive_power'],
+    smpplot[1].plot(combined_main_array['freq'], combined_main_array['magnitude'],
                     color=hex_dictionary['M0'], label='Main Array')
     smpplot[0].plot(combined_intf_array['freq'], combined_intf_array['phase_deg'] % 360.0,
                     color=hex_dictionary['I0'], label='Intf Array')
-    smpplot[1].plot(combined_intf_array['freq'], combined_intf_array['receive_power'],
+    smpplot[1].plot(combined_intf_array['freq'], combined_intf_array['magnitude'],
                     color=hex_dictionary['I0'], label='Intf Array')
 
     smpplot[0].set_ylabel('S12 Phase of\nArrays [degrees]')  # from antenna to feedline end at building.
@@ -442,43 +295,6 @@ def main():
     smpplot[4].set_ylabel('S12 Intf Phase Offset\n from Own Line of Best\nFit [degrees]')
     smpplot[5].set_ylabel('S12 Perceived Time\nDifference b/w arrays\n Based on Phase [ns]')
     smpplot[5].plot(array_diff['freq'], array_diff['time_ns'])
-
-    # smpplot[5].set_ylabel('Main Array Path Delays (ns)')
-    # smpplot[6].set_ylabel('Intf Array Path Delays (ns)')
-    # for ant, dataset in delay_dict.items():
-    #     #print len(delay_freq_list), dataset.shape
-    #     if ant[0] == 'M':
-    #         if ant != 'M_all':
-    #             smpplot[5].plot(delay_freq_list, dataset, color=hex_dictionary[ant],
-    #                             label='{}'.format(ant))
-    #     else:
-    #         if ant != 'I_all':
-    #             smpplot[6].plot(delay_freq_list, dataset, color=hex_dictionary[ant],
-    #                             label='{}'.format(ant))
-    #
-    # smpplot[5].plot(delay_freq_list, delay_dict['M_all'], color=hex_dictionary['other'],
-    #                             label='Combined Main')  # plot last
-    # smpplot[6].plot(delay_freq_list, delay_dict['I_all'], color=hex_dictionary['other'],
-    #                 label='Combined Intf')
-    # xmin, xmax, ymin, ymax = smpplot[5].axis()
-    # if ymax > 1500:
-    #     smpplot[5].axis(ymax=1500)
-    # if ymin < 0:
-    #     smpplot[5].axis(ymin=0)
-    # xmin, xmax, ymin, ymax = smpplot[6].axis()
-    # if ymax > 1500:
-    #     smpplot[6].axis(ymax=1500)
-    # if ymin < 0:
-    #     smpplot[6].axis(ymin=0)
-
-    #smpplot[5].legend(fontsize=10, ncol=3)
-    #smpplot[6].legend(fontsize=12)
-
-    #smpplot[7].plot(delay_freq_list, delay_dict['M_all'] - delay_dict['I_all'])
-    #smpplot[7].set_ylabel('Time diff b/w arrival\nof Arrays from\nFeedlines Alone (ns)')
-    #xmin, xmax, ymin, ymax = smpplot[7].axis()
-    #if ymax > 1000 or ymin < -1000:
-    #    smpplot[7].axis(ymin=-1000, ymax=1000)
 
     if missing_data:  # not empty
         missing_data_statement = "***MISSING DATA FROM ANTENNA(S) "

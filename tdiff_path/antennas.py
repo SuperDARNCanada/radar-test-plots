@@ -76,7 +76,7 @@ else:
 # Balun mismatch for each individual antenna is estimated here.
 
 
-def unwrap_phase(data):
+def unwrap_phase(data):  # TODO fix and remove the phase_deg_unwrap dtype in this file
     # take a numpy array with phase_deg and phase_rad datatypes and unwrap.
     #if max(data['phase_deg']) < 180.0 and min(data['phase_deg']) > -180.0:
         # unwrap
@@ -92,7 +92,6 @@ def unwrap_phase(data):
                 data[i]['phase_deg_unwrap'] = data[i]['phase_deg'] + 360.0
         else:
             entry['phase_deg_unwrap'] = entry['phase_deg']
-
 
     return data
 

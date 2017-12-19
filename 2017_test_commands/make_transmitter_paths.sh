@@ -3,7 +3,7 @@
 MY_DIR=`dirname "$(readlink -f "$0")"`
 echo $MY_DIR
 cd $MY_DIR
-cd ..
+cd ../tdiff_path/
 
 python ./transmitter_paths.py '20170930 Prince George' /home/shared/Sync/Sites/Prince_George/Trips/2017/site_data/DATA/ /home/shared/Sync/Sites/Prince_George/Trips/2017/site_data/Data_Analysis/Transmitter-Path/ path-files.json delay-times.json
 

@@ -14,6 +14,8 @@ from scipy import stats
 import json
 import csv
 
+from dataset_operations.dataset_operations import correct_frequency_array
+
 # General variables to change depending on data being used
 radar_name = sys.argv[1]
 data_location = sys.argv[2]
@@ -26,93 +28,6 @@ plot_title = radar_name + ' Total Phase Path'
 print radar_name, data_location, path_file_str, plot_filename
 
 sys.path.append(data_location)
-
-
-def unwrap_phase(data):
-    # take a numpy array with phase_deg and phase_rad datatypes and unwrap.
-    if max(data['phase_deg']) < 180.0 and min(data['phase_deg']) > -180.0:
-        # unwrap
-        for num, entry in enumerate(data['phase_deg']):
-            if entry > 320.0 + data['phase_deg'][num - 1]:
-                for i in range(num, len(data)):
-                    data['phase_deg'][i] = data['phase_deg'][i] - 360.0
-                    if 'phase_rad' in data.dtype.names:
-                        data['phase_rad'][i] = data['phase_deg'][i] * math.pi / 180.0
-            elif entry < -320.0 + data['phase_deg'][num - 1]:
-                for i in range(num, len(data)):
-                    data['phase_deg'][i] = data['phase_deg'][i] + 360.0
-                    if 'phase_rad' in data.dtype.names:
-                        data['phase_rad'][i] = data['phase_deg'][i] * math.pi / 180.0
-
-
-def correct_frequency_array(dict_of_arrays_with_freq_dtype):
-
-    # find latest starting frequency
-    latest_starting_freq = 0
-    earliest_ending_freq = 10000000000
-    max_data_points = 0
-    for path, array in dict_of_arrays_with_freq_dtype.items():
-        if array['freq'][0] > latest_starting_freq:
-            latest_starting_freq = array['freq'][0]
-        if array['freq'][-1] < earliest_ending_freq:
-            earliest_ending_freq = array['freq'][-1]
-        if array.shape[0] > max_data_points:
-            max_data_points = array.shape[0]
-            max_array = path
-
-    while dict_of_arrays_with_freq_dtype[max_array]['freq'][0] < latest_starting_freq:
-        dict_of_arrays_with_freq_dtype[max_array] = \
-            np.delete(dict_of_arrays_with_freq_dtype[max_array], (0), axis=0)
-
-    while dict_of_arrays_with_freq_dtype[max_array]['freq'][-1] > earliest_ending_freq:
-        dict_of_arrays_with_freq_dtype[max_array] = \
-            np.delete(dict_of_arrays_with_freq_dtype[max_array], (-1), axis=0)
-
-    len_of_new_arrays = dict_of_arrays_with_freq_dtype[max_array].shape[0]
-    reference_frequency_array = dict_of_arrays_with_freq_dtype[max_array]['freq']
-
-    new_dict_of_arrays = {}
-
-    for path, array in dict_of_arrays_with_freq_dtype.items():
-        new_dict_of_arrays[path] = np.zeros(len_of_new_arrays, dtype=array.dtype)
-        new_dict_of_arrays[path]['freq'] = reference_frequency_array
-        new_dict_of_arrays[path]['phase_deg'] = np.interp(reference_frequency_array, array['freq'], array['phase_deg'])
-        new_dict_of_arrays[path]['time_ns'] = np.interp(reference_frequency_array, array['freq'], array['time_ns'])
-
-    return new_dict_of_arrays
-
-
-def get_slope_of_phase_in_nano(phase_data, freq_hz):
-    # Freq_hz is list in Hz, phase_data is in rads.
-    # dy = np.diff(dataset['phase_rad']) * -10 ** 9 / dx
-    # np.insert(dy, [0], delay_freq_list, axis=1)
-
-    if len(freq_hz) != len(phase_data):
-        sys.exit('Problem with slope array lengths differ {} {}'.format(len(freq_hz), len(phase_data)))
-
-    freq_data = [i * 2 * math.pi for i in freq_hz]
-
-
-    # for smoother plot
-    dy = []
-    for index, entry in enumerate(phase_data):
-        if index < 3:
-            tslope, intercept, rvalue, pvalue, stderr = stats.linregress(
-                freq_data[:(index + 4)],
-                phase_data[:(index + 4)])
-        elif index >= len(phase_data) - 4:
-            tslope, intercept, rvalue, pvalue, stderr = stats.linregress(
-                freq_data[(index - 3):],
-                phase_data[(index - 3):])
-        else:
-            tslope, intercept, rvalue, pvalue, stderr = stats.linregress(
-                freq_data[(index - 3):(index + 4)],
-                phase_data[(index - 3):(index + 4)])
-        dy.append(tslope * -10 ** 9)
-
-    dy = np.array(dy)
-
-    return dy
 
 
 def main():

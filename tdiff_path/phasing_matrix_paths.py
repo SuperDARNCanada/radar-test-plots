@@ -14,6 +14,8 @@ from scipy import stats
 import json
 import csv
 
+from dataset_operations.dataset_operations import check_frequency_array, combine_arrays, unwrap_phase
+
 # General variables to change depending on data being used
 radar_name = sys.argv[1]
 data_location = sys.argv[2]
@@ -22,6 +24,7 @@ path_file_str = sys.argv[4]
 time_file_str = sys.argv[5]
 
 plot_filename = radar_name + ' PM-path.png'
+plot_filename_2 = radar_name + ' Individual-PM-paths.png'
 plot_title = radar_name + ' Phasing Matrix Paths'
 
 print radar_name, data_location, plot_location, path_file_str, plot_filename
@@ -37,139 +40,6 @@ hex_colors = ['#ff1a1a', '#993300', '#ffff1a', '#666600', '#ff531a', '#cc9900', 
               '#5500ff', '#a366ff', '#ff00ff', '#e6005c', '#ffaa80', '#999999']
 hex_dictionary = {'other': '#000000'}
 array_colors = {'main': '#ff1a1a', 'intf': '#993300', 'main_test': '#33cccc', 'intf_test': '#e6005c'}
-
-
-def unwrap_phase(data):
-    # take a numpy array with phase_deg and phase_rad datatypes and unwrap.
-    if max(data['phase_deg']) < 180.0 and min(data['phase_deg']) > -180.0:
-        # unwrap
-        for num, entry in enumerate(data['phase_deg']):
-            if entry > 320.0 + data['phase_deg'][num - 1]:
-                for i in range(num, len(data)):
-                    data['phase_deg'][i] = data['phase_deg'][i] - 360.0
-                    if 'phase_rad' in data.dtype.names:
-                        data['phase_rad'][i] = data['phase_deg'][i] * math.pi / 180.0
-            elif entry < -320.0 + data['phase_deg'][num - 1]:
-                for i in range(num, len(data)):
-                    data['phase_deg'][i] = data['phase_deg'][i] + 360.0
-                    if 'phase_rad' in data.dtype.names:
-                        data['phase_rad'][i] = data['phase_deg'][i] * math.pi / 180.0
-
-
-def combine_arrays(array_dict):
-    one_array_key = random.choice(array_dict.keys())
-
-    for k, v in array_dict.iteritems():
-        for a, b in zip(array_dict[one_array_key], v):
-            if a['freq'] != b['freq']:
-                errmsg = "Frequencies not Equal {} {}".format(a['freq'], b['freq'])
-                sys.exit(errmsg)
-
-    # now we have data points at same frequencies.
-    # next - sum signals.
-    #number_of_data_points = len(array_dict[one_array_key])
-
-    combined_array = np.copy(array_dict[one_array_key])
-
-    for k, v in array_dict.iteritems():
-        # print k
-        if k == one_array_key:
-            continue  # skip, do not add
-        for c, a in zip(combined_array, v):
-            if c['freq'] != a['freq']:
-                errmsg = "Frequencies not Equal"
-                sys.exit(errmsg)
-
-            # convert to rads - negative because we are using proof using cos(x-A)
-            phase_rads1 = -(c['phase_rad'] % (2 * math.pi))
-            phase_rads2 = -(a['phase_rad'] % (2 * math.pi))
-
-            # we want voltage amplitude so use /20
-            amplitude_1 = 10 ** (c['magnitude'] / 20)
-            amplitude_2 = 10 ** (a['magnitude'] / 20)
-
-            combined_amp_squared = (
-                amplitude_1 ** 2 + amplitude_2 ** 2 + 2 * amplitude_1 * amplitude_2 * math.cos(
-                    phase_rads1 - phase_rads2))
-            combined_amp = math.sqrt(combined_amp_squared)
-            # we based it on amplitude of 1 at each antenna.
-            c['magnitude'] = 20 * math.log(combined_amp, 10)
-            combined_phase = math.atan2(
-                amplitude_1 * math.sin(phase_rads1) + amplitude_2 * math.sin(phase_rads2),
-                amplitude_1 * math.cos(phase_rads1) + amplitude_2 * math.cos(phase_rads2))
-
-            # this is negative so make it positive cos(x-theta)
-            c['phase_rad'] = -combined_phase
-            c['phase_deg'] = -combined_phase * 360.0 / (2.0 * math.pi)
-
-    unwrap_phase(combined_array)
-    return combined_array
-
-
-def check_frequency_array(dict_of_arrays_with_freq_dtype, min_dataset_length, freqs):
-    short_datasets = []
-    long_datasets = {}
-    for ant, dataset in dict_of_arrays_with_freq_dtype.items():
-        if len(dataset) == min_dataset_length:
-            short_datasets.append(ant)
-        else:
-            long_datasets[ant] = len(dataset)
-
-    for ant in short_datasets:
-        for value, entry in enumerate(dict_of_arrays_with_freq_dtype[ant]):
-            if entry['freq'] != freqs[value]:
-                sys.exit('Frequencies do not match in datasets - exiting')
-
-    for ant, length in long_datasets.items():
-        lines_to_delete = []
-        if length % min_dataset_length == 0:
-            integer = length/min_dataset_length
-            for value, entry in enumerate(dict_of_arrays_with_freq_dtype[ant]):
-                if (value-1) % integer != 0:
-                    #print entry['freq']
-                    lines_to_delete.append(value)
-                elif entry['freq'] != freqs[(value-1)/integer]:
-                    sys.exit('Datasets are in multiple lengths but frequency axis '
-                              'values are not the same when divided, length {} broken down to length '
-                              '{}'.format(length, min_dataset_length))
-            dict_of_arrays_with_freq_dtype[ant] = np.delete(dict_of_arrays_with_freq_dtype[ant], lines_to_delete, axis=0)
-        else:
-            sys.exit('Please ensure datasets are the same length and frequency axes '
-                     'are the same, length {} is greater than minimum dataset length '
-                     '{}'.format(length, min_dataset_length))
-
-
-def get_slope_of_phase_in_nano(phase_data, freq_hz):
-    # Freq_hz is list in Hz, phase_data is in rads.
-    # dy = np.diff(dataset['phase_rad']) * -10 ** 9 / dx
-    # np.insert(dy, [0], delay_freq_list, axis=1)
-
-    if len(freq_hz) != len(phase_data):
-        sys.exit('Problem with slope array lengths differ {} {}'.format(len(freq_hz), len(phase_data)))
-
-    freq_data = [i * 2 * math.pi for i in freq_hz]
-
-
-    # for smoother plot
-    dy = []
-    for index, entry in enumerate(phase_data):
-        if index < 3:
-            tslope, intercept, rvalue, pvalue, stderr = stats.linregress(
-                freq_data[:(index + 4)],
-                phase_data[:(index + 4)])
-        elif index >= len(phase_data) - 4:
-            tslope, intercept, rvalue, pvalue, stderr = stats.linregress(
-                freq_data[(index - 3):],
-                phase_data[(index - 3):])
-        else:
-            tslope, intercept, rvalue, pvalue, stderr = stats.linregress(
-                freq_data[(index - 3):(index + 4)],
-                phase_data[(index - 3):(index + 4)])
-        dy.append(tslope * -10 ** 9)
-
-    dy = np.array(dy)
-
-    return dy
 
 
 def main():
@@ -248,7 +118,7 @@ def main():
                                          ('phase_deg', 'f4'), ('phase_rad', 'f4')])
 
             # unwrap
-            unwrap_phase(data)
+            data = unwrap_phase(data)
 
             if len(data) < min_dataset_length:
                 min_dataset_length = len(data)
@@ -274,9 +144,9 @@ def main():
             else:
                 sys.exit('There is an invalid key {}'.format(k))
 
-    check_frequency_array(main_data, min_dataset_length, min_data_freqs)
-    check_frequency_array(atten_data, min_dataset_length, min_data_freqs)
-    check_frequency_array(combined_array_test, min_dataset_length, min_data_freqs)
+    check_frequency_array(main_data, min_dataset_length, freqs=min_data_freqs)
+    check_frequency_array(atten_data, min_dataset_length, freqs=min_data_freqs)
+    check_frequency_array(combined_array_test, min_dataset_length, freqs=min_data_freqs)
 
     if attenuator_flag:
         if atten_data:
@@ -358,7 +228,7 @@ def main():
                                                  ('time_ns', 'f4')])
         array_diff_dict = {'calculated': array_diff}
 
-        unwrap_phase(array_diff_dict['calculated'])
+        array_diff_dict['calculated'] = unwrap_phase(array_diff_dict['calculated'])
 
         if combined_test_data_flag:
             array_diff = []
@@ -373,7 +243,7 @@ def main():
                                                      ('time_ns', 'f4')])
             array_diff_dict['tested'] = array_diff
 
-            unwrap_phase(array_diff_dict['tested'])
+            array_diff_dict['tested'] = unwrap_phase(array_diff_dict['tested'])
         # PLOTTING
 
         numplots = 6
@@ -464,6 +334,24 @@ def main():
 
         fig.savefig(plot_location + plot_filename)
         plt.close(fig)
+
+        fig2, newplot = plt.subplots(2, figsize=(18, 18))
+        for ant, dataset in all_data.items():
+                newplot[0].plot(dataset['freq'], dataset['phase_deg'],
+                                label='{}'.format(ant),
+                                color=hex_dictionary[ant])
+                newplot[1].plot(dataset['freq'], dataset['magnitude'],
+                                label='{}'.format(ant),
+                                color=hex_dictionary[ant])
+        newplot[0].set_ylabel('Phase of Individual Paths [deg]')
+        newplot[1].set_ylabel('Magnitude of Individual Paths [dB]')
+        newplot[1].set_xlabel('Frequency [Hz]')
+        newplot[0].set_title(plot_title, fontsize=30)
+        for x in range(0,2):
+            newplot[x].grid()
+            newplot[x].legend(fontsize=12)
+        fig2.savefig(plot_location + plot_filename_2)
+        plt.close(fig2)
     elif combined_test_data_flag:  # only combined data given
         numplots = 4
         fig, smpplot = plt.subplots(numplots, sharex=True, figsize=(18, 24))
@@ -502,7 +390,7 @@ def main():
                                                  ('time_ns', 'f4')])
         array_diff_dict['tested'] = array_diff
 
-        unwrap_phase(array_diff_dict['tested'])
+        array_diff_dict['tested'] = unwrap_phase(array_diff_dict['tested'])
 
         smpplot[2].plot(array_diff_dict['tested']['freq'], array_diff_dict['tested']['phase_deg'],
                         label='Tested Arrays Difference', color=array_colors['main_test'])

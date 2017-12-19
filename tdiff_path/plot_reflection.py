@@ -1,8 +1,8 @@
 #!/usr/bin/python
 
-# plot_vswrs.py
-# To plot all VSWR data on the same plot to visualize
-# differences between the antennas.
+# plot_reflection.py
+# To plot all reflection data on the same plot.
+# This script for if your data is in dB, not SWR format.
 
 import sys
 import time
@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 from scipy import stats
 import json
 import csv
+
+from dataset_operations.dataset_operations import check_frequency_array
 
 # General variables to change depending on data being used
 radar_name = sys.argv[1]  # eg. Inuvik
@@ -42,40 +44,6 @@ hex_colors = ['#ff1a1a', '#993300', '#ffff1a', '#666600', '#ff531a', '#cc9900', 
               '#7a7a52', '#004d00', '#33ff33', '#26734d', '#003366', '#33cccc', '#00004d',
               '#5500ff', '#a366ff', '#ff00ff', '#e6005c', '#ffaa80', '#999999']
 hex_dictionary = {'other': '#000000'}
-
-
-def check_frequency_array(dict_of_arrays_with_freq_dtype, min_dataset_length):
-    short_datasets = []
-    long_datasets = {}
-    for ant, dataset in dict_of_arrays_with_freq_dtype.items():
-        if len(dataset) == min_dataset_length:
-            short_datasets.append(ant)
-        else:
-            long_datasets[ant] = len(dataset)
-
-    for ant in short_datasets:
-        for value, entry in enumerate(dict_of_arrays_with_freq_dtype[ant]):
-            if entry['freq'] != dict_of_arrays_with_freq_dtype[short_datasets[0]][value]['freq']:
-                sys.exit('Frequencies do not match in datasets - exiting')
-
-    for ant, length in long_datasets.items():
-        lines_to_delete = []
-        if length % min_dataset_length == 0:
-            integer = length/min_dataset_length
-            for value, entry in enumerate(dict_of_arrays_with_freq_dtype[ant]):
-                if (value-1) % integer != 0:
-                    #print entry['freq']
-                    lines_to_delete.append(value)
-                elif entry['freq'] != dict_of_arrays_with_freq_dtype[short_datasets[0]][(value-1)/integer]['freq']:
-                    sys.exit('Datasets are in multiple lengths but frequency axis '
-                              'values are not the same when divided, length {} broken down to length '
-                              '{}'.format(length, min_dataset_length))
-            dict_of_arrays_with_freq_dtype[ant] = np.delete(dict_of_arrays_with_freq_dtype[ant], lines_to_delete, axis=0)
-        else:
-            sys.exit('Please ensure datasets are the same length and frequency axes '
-                     'are the same, length {} is greater than minimum dataset length '
-                     '{}'.format(length, min_dataset_length))
-    return dict_of_arrays_with_freq_dtype
 
 
 def main():
