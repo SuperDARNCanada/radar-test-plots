@@ -23,6 +23,7 @@ data_location = sys.argv[2]
 plot_location = sys.argv[3]
 path_file_str = sys.argv[4]
 time_file_str = sys.argv[5]
+time_file_loc = 'numpy_channel_data/'
 
 plot_filename = radar_name + ' transmitter-path.png'
 plot_title = radar_name + ' Transmitter Paths'
@@ -145,9 +146,7 @@ def main():
             for i in range(0, min_dataset_length):
                 freq = 8000000 + (12000000/(min_dataset_length - 1)) * i
                 phase_rad = slope * freq + intercept
-                phase_deg = (phase_rad * 180.0 / math.pi) % 360
-                if phase_deg > 180.0:
-                    phase_deg = phase_deg - 360.0
+                phase_deg = phase_rad * 180.0 / math.pi
                 data.append((freq, 0.0, phase_deg, phase_rad))
             intf_data = {'I0': np.array(data, dtype=[('freq', 'i4'), ('magnitude', 'f4'),
                                               ('phase_deg', 'f4'), ('phase_rad', 'f4')])}
@@ -211,6 +210,11 @@ def main():
 
     if time_file_str != 'None':
         array_diff.tofile(plot_location + time_file_str, sep="\n")
+    if time_file_loc != 'None':
+        for ant, array in all_data.items():
+            array.tofile(plot_location + time_file_loc + ant + '.txt', sep="\n")
+        combined_main_array.tofile(plot_location + time_file_loc + 'main_array_combined.txt', sep="\n")
+        combined_intf_array.tofile(plot_location + time_file_loc + 'intf_array_combined.txt', sep="\n")
     # PLOTTING
 
     numplots = 6

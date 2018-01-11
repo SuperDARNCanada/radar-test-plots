@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# for plotting 2009 data. special case where we only have phase for 2009 antenna data.
+# for plotting 2009 vs 2017 data. special case where we only have phase for 2009 antenna data.
 
 import sys
 import fnmatch

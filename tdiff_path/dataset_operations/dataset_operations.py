@@ -15,28 +15,28 @@ def unwrap_phase(data):  # TODO fix up so returns separate data
     if 'phase_deg' in data.dtype.names:
         if max(data['phase_deg']) < 180.0 and min(data['phase_deg']) > -180.0:
             for num, entry in enumerate(data['phase_deg']):
-                if entry > 320.0 + data['phase_deg'][num - 1]:
+                if entry > 300.0 + data['phase_deg'][num - 1]:
                     for i in range(num, len(data)):
                         new_data['phase_deg'][i] = data['phase_deg'][i] - 360.0
-                elif entry < -320.0 + data['phase_deg'][num - 1]:
+                elif entry < -300.0 + data['phase_deg'][num - 1]:
                     for i in range(num, len(data)):
                         new_data['phase_deg'][i] = data['phase_deg'][i] + 360.0
     if 'phase' in data.dtype.names:
         if max(data['phase']) < 180.0 and min(data['phase']) > -180.0:
             for num, entry in enumerate(data['phase']):
-                if entry > 320.0 + data['phase'][num - 1]:
+                if entry > 300.0 + data['phase'][num - 1]:
                     for i in range(num, len(data)):
                         new_data['phase'][i] = data['phase'][i] - 360.0
-                elif entry < -320.0 + data['phase'][num - 1]:
+                elif entry < -300.0 + data['phase'][num - 1]:
                     for i in range(num, len(data)):
                         new_data['phase'][i] = data['phase'][i] + 360.0
     if 'phase_rad' in data.dtype.names:
         if max(data['phase_rad']) < math.pi and min(data['phase_rad']) > -math.pi:
             for num, entry in enumerate(data['phase_rad']):
-                if entry > (320.0 * math.pi / 180.0) + data['phase_rad'][num - 1]:
+                if entry > (300.0 * math.pi / 180.0) + data['phase_rad'][num - 1]:
                     for i in range(num, len(data)):
                         new_data['phase_rad'][i] = data['phase_rad'][i] - 2 * math.pi
-                elif entry < -(320.0 * math.pi / 180.0) + data['phase_rad'][num - 1]:
+                elif entry < -(300.0 * math.pi / 180.0) + data['phase_rad'][num - 1]:
                     for i in range(num, len(data)):
                         new_data['phase_rad'][i] = data['phase_rad'][i] + 2 * math.pi
 
@@ -243,7 +243,7 @@ def combine_arrays(array_dict):  # TODO check this
     """
     one_array_key = random.choice(array_dict.keys())
 
-    for k, v in array_dict.iteritems():
+    for k, v in array_dict.items():
         for a, b in zip(array_dict[one_array_key], v):
             if a['freq'] != b['freq']:
                 errmsg = "Frequencies not Equal {} {}".format(a['freq'], b['freq'])
@@ -288,3 +288,27 @@ def combine_arrays(array_dict):  # TODO check this
 
     combined_array = unwrap_phase(combined_array)
     return combined_array
+
+
+def reflection_to_transmission_phase(data):
+    """
+    Return the phase values halved.
+    :param data: 
+    :return: 
+    """
+
+    data = unwrap_phase(data) # needs to be a phase-unwrapped dataset.
+
+    try:
+        assert 'phase' in data.dtype.names or 'phase_deg' in data.dtype.names or 'phase_rad' in data.dtype.names
+    except:
+        raise Exception('Cannot Find Phase Dtype to Wrap in Numpy Array')
+
+    new_data = np.copy(data)
+    if 'phase' in data.dtype.names:
+        new_data['phase'] = np.true_divide(new_data['phase'], 2.0)
+    if 'phase_deg' in data.dtype.names:
+        new_data['phase_deg'] = np.true_divide(new_data['phase_deg'], 2.0)
+    if 'phase_rad' in data.dtype.names:
+        new_data['phase_rad'] = np.true_divide(new_data['phase_rad'], 2.0)
+    return new_data

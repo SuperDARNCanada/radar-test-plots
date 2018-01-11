@@ -22,6 +22,7 @@ data_location = sys.argv[2]
 plot_location = sys.argv[3]
 path_file_str = sys.argv[4]
 time_file_str = sys.argv[5]
+time_file_loc = 'numpy_channel_data/'
 
 plot_filename = radar_name + ' PM-path.png'
 plot_filename_2 = radar_name + ' Individual-PM-paths.png'
@@ -117,7 +118,6 @@ def main():
             data = np.array(data, dtype=[('freq', 'i4'), ('magnitude', 'f4'),
                                          ('phase_deg', 'f4'), ('phase_rad', 'f4')])
 
-            # unwrap
             data = unwrap_phase(data)
 
             if len(data) < min_dataset_length:
@@ -219,9 +219,7 @@ def main():
         array_diff = []
         for m, i in zip(combined_main_array, combined_intf_array):
             freq = i['freq']
-            phase = ((m['phase_deg'] - i['phase_deg']) % 360)
-            if phase > 180:
-                phase = -360 + phase
+            phase = m['phase_deg'] - i['phase_deg']
             time_ns = phase * 10**9 / (freq * 360.0)
             array_diff.append((freq, phase, time_ns))
         array_diff = np.array(array_diff, dtype=[('freq', 'i4'), ('phase_deg', 'f4'),
@@ -234,9 +232,7 @@ def main():
             array_diff = []
             for m, i in zip(combined_array_test['main_combined'], combined_array_test['intf_combined']):
                 freq = i['freq']
-                phase = ((m['phase_deg'] - i['phase_deg']) % 360)
-                if phase > 180:
-                    phase = -360 + phase
+                phase = m['phase_deg'] - i['phase_deg']
                 time_ns = phase * 10**9 / (freq * 360.0)
                 array_diff.append((freq, phase, time_ns))
             array_diff = np.array(array_diff, dtype=[('freq', 'i4'), ('phase_deg', 'f4'),
@@ -352,6 +348,15 @@ def main():
             newplot[x].legend(fontsize=12)
         fig2.savefig(plot_location + plot_filename_2)
         plt.close(fig2)
+
+        if time_file_loc != 'None':
+            for ant, array in all_data.items():
+                array.tofile(plot_location + time_file_loc + ant + '.txt', sep="\n")
+            combined_main_array.tofile(plot_location + time_file_loc + 'main_array_combined.txt',
+                                       sep="\n")
+            combined_intf_array.tofile(plot_location + time_file_loc + 'intf_array_combined.txt',
+                                       sep="\n")
+
     elif combined_test_data_flag:  # only combined data given
         numplots = 4
         fig, smpplot = plt.subplots(numplots, sharex=True, figsize=(18, 24))
@@ -381,9 +386,7 @@ def main():
         for m, i in zip(combined_array_test['main_combined'],
                         combined_array_test['intf_combined']):
             freq = i['freq']
-            phase = ((m['phase_deg'] - i['phase_deg']) % 360)
-            if phase > 180:
-                phase = -360 + phase
+            phase = m['phase_deg'] - i['phase_deg']
             time_ns = phase * 10 ** 9 / (freq * 360.0)
             array_diff.append((freq, phase, time_ns))
         array_diff = np.array(array_diff, dtype=[('freq', 'i4'), ('phase_deg', 'f4'),
@@ -424,9 +427,15 @@ def main():
     if combined_test_data_flag:
         if time_file_str != 'None':
             array_diff_dict['tested'].tofile(plot_location + time_file_str, sep="\n")
+        if not main_data:
+            combined_array_test['main_combined'].tofile(
+                plot_location + time_file_loc + 'main_array_combined.txt', sep="\n")
+            combined_array_test['intf_combined'].tofile(
+                plot_location + time_file_loc + 'intf_array_combined.txt', sep="\n")
     else:
         if time_file_str != 'None':
             array_diff_dict['calculated'].tofile(plot_location + time_file_str, sep="\n")
+
 
 if __name__ == main():
     main()

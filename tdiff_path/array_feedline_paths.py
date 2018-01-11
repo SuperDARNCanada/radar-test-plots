@@ -18,7 +18,7 @@ from scipy import stats
 import json
 import csv
 
-from dataset_operations.dataset_operations import unwrap_phase, check_frequency_array, combine_arrays
+from dataset_operations.dataset_operations import unwrap_phase, check_frequency_array, combine_arrays, reflection_to_transmission_phase
 
 # General variables to change depending on data being used
 radar_name = sys.argv[1]
@@ -26,6 +26,7 @@ data_location = sys.argv[2]
 plot_location = sys.argv[3]
 vswr_files_str = sys.argv[4]
 time_file_str = sys.argv[5]
+time_file_loc = 'numpy_channel_data/'
 
 plot_filename = radar_name + ' antenna-feedlines-path.png'
 plot_title = radar_name + ' Antennas/Feedlines Path'
@@ -163,12 +164,13 @@ def main():
                 # power incoming from antenna will have mismatch point and then cable losses.
                 receive_power = transmission_dB_at_balun - cable_loss
                 receive_power = round(receive_power, 5)
-                phase_rad = (float(phase)/2) * math.pi / 180.0
-                data.append((freq, receive_power, float(phase) / 2, phase_rad))
+                phase_rad = float(phase) * math.pi / 180.0
+                data.append((freq, receive_power, float(phase), phase_rad))
             data = np.array(data, dtype=[('freq', 'i4'), ('magnitude', 'f4'),
                                          ('phase_deg', 'f4'), ('phase_rad', 'f4')])
 
-            data = unwrap_phase(data)
+            data = reflection_to_transmission_phase(data)
+            # now half the phase for single-direction - unwraps within function.
 
             if len(data) < min_dataset_length:
                 min_dataset_length = len(data)
@@ -234,9 +236,7 @@ def main():
     array_diff = []
     for m, i in zip(combined_main_array, combined_intf_array):
         freq = i['freq']
-        phase = ((m['phase_deg'] - i['phase_deg']) % 360.0)
-        if phase > 180:
-            phase = -360 + phase
+        phase = (m['phase_deg'] - i['phase_deg'])
         time_ns = phase * 10**9 / (freq * 360.0)
         array_diff.append((freq, phase, time_ns))
     array_diff = np.array(array_diff, dtype=[('freq', 'i4'), ('phase_deg', 'f4'),
@@ -246,6 +246,11 @@ def main():
 
     if time_file_str != 'None':
         array_diff.tofile(plot_location + time_file_str, sep="\n")
+    if time_file_loc != 'None':
+        for ant, array in all_data.items():
+            array.tofile(plot_location + time_file_loc + ant + '.txt', sep="\n")
+        combined_main_array.tofile(plot_location + time_file_loc + 'main_array_combined.txt', sep="\n")
+        combined_intf_array.tofile(plot_location + time_file_loc + 'intf_array_combined.txt', sep="\n")
     # PLOTTING
 
     numplots = 6
