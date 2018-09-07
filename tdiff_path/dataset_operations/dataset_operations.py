@@ -5,40 +5,46 @@ from scipy import stats
 import random
 
 
-def unwrap_phase(data):  # TODO fix up so returns separate data
-    # take a numpy array with phase_deg and phase_rad datatypes and unwrap.
+def unwrap_phase(data):
+    """
+    Take a numpy array with phase, phase_deg, and/or phase_rad datatypes and unwrap.
+    :param data: a numpy array
+    :return: a new array with unwrapped phase, phase_deg, and/or phase_rad dtypes
+    """
     try:
-        assert 'phase' in data.dtype.names or 'phase_deg' in data.dtype.names or 'phase_rad' in data.dtype.names
+        assert 'phase' in data.dtype.names or 'phase_deg' in data.dtype.names or \
+               'phase_rad' in data.dtype.names
     except:
         raise Exception('Cannot Find Phase Dtype to Wrap in Numpy Array')
+
     new_data = np.copy(data)
     if 'phase_deg' in data.dtype.names:
         if max(data['phase_deg']) < 180.0 and min(data['phase_deg']) > -180.0:
             for num, entry in enumerate(data['phase_deg']):
-                if entry > 300.0 + data['phase_deg'][num - 1]:
+                if entry > 250.0 + data['phase_deg'][num - 1]:
                     for i in range(num, len(data)):
-                        new_data['phase_deg'][i] = data['phase_deg'][i] - 360.0
-                elif entry < -300.0 + data['phase_deg'][num - 1]:
+                        new_data['phase_deg'][i] -= 360.0
+                elif entry < -250.0 + data['phase_deg'][num - 1]:
                     for i in range(num, len(data)):
-                        new_data['phase_deg'][i] = data['phase_deg'][i] + 360.0
+                        new_data['phase_deg'][i] += 360.0
     if 'phase' in data.dtype.names:
         if max(data['phase']) < 180.0 and min(data['phase']) > -180.0:
             for num, entry in enumerate(data['phase']):
-                if entry > 300.0 + data['phase'][num - 1]:
-                    for i in range(num, len(data)):
-                        new_data['phase'][i] = data['phase'][i] - 360.0
-                elif entry < -300.0 + data['phase'][num - 1]:
-                    for i in range(num, len(data)):
-                        new_data['phase'][i] = data['phase'][i] + 360.0
+                if entry > (250.0 + data['phase'][num - 1]):
+                    for i in range(num, len(new_data)):
+                        new_data['phase'][i] -= 360.0
+                elif entry < (-250.0 + data['phase'][num - 1]):
+                    for i in range(num, len(new_data)):
+                        new_data['phase'][i] += 360.0
     if 'phase_rad' in data.dtype.names:
         if max(data['phase_rad']) < math.pi and min(data['phase_rad']) > -math.pi:
             for num, entry in enumerate(data['phase_rad']):
-                if entry > (300.0 * math.pi / 180.0) + data['phase_rad'][num - 1]:
+                if entry > (250.0 * math.pi / 180.0) + data['phase_rad'][num - 1]:
                     for i in range(num, len(data)):
-                        new_data['phase_rad'][i] = data['phase_rad'][i] - 2 * math.pi
-                elif entry < -(300.0 * math.pi / 180.0) + data['phase_rad'][num - 1]:
+                        new_data['phase_rad'][i] -= 2 * math.pi
+                elif entry < -(250.0 * math.pi / 180.0) + data['phase_rad'][num - 1]:
                     for i in range(num, len(data)):
-                        new_data['phase_rad'][i] = data['phase_rad'][i] + 2 * math.pi
+                        new_data['phase_rad'][i] += 2 * math.pi
 
     return new_data
 
@@ -241,7 +247,7 @@ def combine_arrays(array_dict):  # TODO check this
     :param array_dict: 
     :return: combined_array
     """
-    one_array_key = random.choice(array_dict.keys())
+    one_array_key = random.choice(list(array_dict.keys()))
 
     for k, v in array_dict.items():
         for a, b in zip(array_dict[one_array_key], v):
@@ -255,7 +261,7 @@ def combine_arrays(array_dict):  # TODO check this
 
     combined_array = np.copy(array_dict[one_array_key])
 
-    for k, v in array_dict.iteritems():
+    for k, v in array_dict.items():
         # print k
         if k == one_array_key:
             continue  # skip, do not add
@@ -290,14 +296,14 @@ def combine_arrays(array_dict):  # TODO check this
     return combined_array
 
 
-def reflection_to_transmission_phase(data):
+def reflection_to_transmission_phase(incoming_data):
     """
     Return the phase values halved.
-    :param data: 
+    :param incoming_data: 
     :return: 
     """
 
-    data = unwrap_phase(data) # needs to be a phase-unwrapped dataset.
+    data = unwrap_phase(incoming_data) # needs to be a phase-unwrapped dataset.
 
     try:
         assert 'phase' in data.dtype.names or 'phase_deg' in data.dtype.names or 'phase_rad' in data.dtype.names
