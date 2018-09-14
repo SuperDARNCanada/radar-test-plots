@@ -112,6 +112,8 @@ def main():
         phase_wrapped_data = wrap_phase(new_dataset)
         all_data_phase_wrapped[antenna] = phase_wrapped_data
 
+    for ant, dataset in raw_data.items():
+        raw_data[ant] = wrap_phase(dataset)  # Wrap for plotting
 
     all_data = {}
     # Also get data that is not phase_wrapped for calculation purposes.
@@ -242,24 +244,30 @@ def main():
 
     ######################################################################################
     # PLOTTING
-    numplots = 7
+    numplots = 6
     plot_num = 0
     fig, smpplot = plt.subplots(numplots, 1, sharex='all', figsize=(18, 24),
-                                gridspec_kw={'height_ratios': [2, 2, 1, 1, 1, 1, 1]})
+                                gridspec_kw={'height_ratios': [2, 2, 2, 1, 1, 1]})
     xmin, xmax, ymin, ymax = smpplot[0].axis(xmin=8e6, xmax=20e6)
     smpplot[numplots - 1].set_xlabel('Frequency (Hz)', size=25.0)
     print("plotting")
+    smpplot[plot_num].set_title(plot_title, size=48.0)
 
+    # PLOT: Phase wrapped of all data
+    for ant, dataset in raw_data.items():
+        smpplot[plot_num].plot(dataset['freq'], dataset['phase_deg'], label=ant,
+                        color=colour_dictionary[ant])
+    smpplot[plot_num].set_ylabel('VSWR Phase All Antennas', size=25.0)
+    plot_num += 1
 
     # PLOT: combined arrays dB and phase.
-    smpplot[plot_num].set_title(plot_title, size=48.0)
     smpplot[plot_num].plot(combined_main_array['freq'], combined_main_array['phase_deg'],
                     color='#2942a8', label='Main Array')
 
     smpplot[plot_num].plot(combined_intf_array['freq'], combined_intf_array['phase_deg'],
                     color='#8ba1fa', label='Intf Array')
 
-    db_smpplot = smpplot[0].twinx()
+    db_smpplot = smpplot[plot_num].twinx()
 
     db_smpplot.plot(combined_main_array['freq'], combined_main_array['magnitude'],
                     color='#bd3f3f', label='Main Array')
@@ -290,33 +298,35 @@ def main():
                 'offset_of_best_fit_rads'] * 180.0 / math.pi,
                             label='{}, delay={} ns'.format(ant,
                                                            linear_fit_dict[ant]['time_delay_ns']),
-                            color=hex_dictionary[ant])
+                            color=colour_dictionary[ant])
         elif ant[0] == 'I':
             smpplot[plot_num + 1].plot(dataset['freq'], linear_fit_dict[ant][
                 'offset_of_best_fit_rads'] * 180.0 / math.pi,
                     label='{}, delay={} ns'.format(ant, linear_fit_dict[ant][
-                        'time_delay_ns']), color=hex_dictionary[ant])
+                        'time_delay_ns']), color=colour_dictionary[ant])
 
     smpplot[plot_num].plot(all_data['M0']['freq'], linear_fit_dict['M_all'][
-        'offset_of_best_fit_rads'] * 180.0 / math.pi, color=hex_dictionary['other'],
+        'offset_of_best_fit_rads'] * 180.0 / math.pi, color=colour_dictionary['other'],
             label='Combined Main, delay={} ns'.format(linear_fit_dict[
                 'M_all']['time_delay_ns']))  # plot last
     smpplot[plot_num + 1].plot(all_data['M0']['freq'], linear_fit_dict['I_all'][
-        'offset_of_best_fit_rads'] * 180.0 / math.pi, color=hex_dictionary['other'],
+        'offset_of_best_fit_rads'] * 180.0 / math.pi, color=colour_dictionary['other'],
             label='Combined Intf, delay={} ns'.format(linear_fit_dict[
                 'I_all']['time_delay_ns']))  # plot last
 
 
-    smpplot[plot_num].legend(fontsize=10, ncol=4)
-    smpplot[plot_num + 1].legend(fontsize=12)
-    smpplot[plot_num].set_ylabel('S12 Main Phase Offset\n from Own Line of Best\nFit [degrees]')
-    smpplot[plot_num + 1].set_ylabel('S12 Intf Phase Offset\n from Own Line of Best\nFit [degrees]')
+    smpplot[plot_num].legend(fontsize=10, ncol=4, loc='upper right')
+    smpplot[plot_num + 1].legend(fontsize=12, loc='upper right')
+    smpplot[plot_num].set_ylabel('S12 Main Phase Offset\n from Own Line of Best\nFit ['
+                                 'degrees]', size=15.0)
+    smpplot[plot_num + 1].set_ylabel('S12 Intf Phase Offset\n from Own Line of Best\nFit [degrees]', size=15.0)
     plot_num += 2
 
     # PLOT: Phase wrapped of all data
     for ant, dataset in all_data_phase_wrapped.items():
         smpplot[plot_num].plot(dataset['freq'], dataset['phase_deg'], label=ant,
-                        color=hex_dictionary[ant])
+                        color=colour_dictionary[ant])
+    smpplot[plot_num].set_ylabel('S12 Phase All Antennas')
 
     if missing_data:  # not empty
         missing_data_statement = "***MISSING DATA FROM ANTENNA(S) "
