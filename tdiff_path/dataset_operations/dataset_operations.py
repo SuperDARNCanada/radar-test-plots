@@ -19,7 +19,7 @@ def unwrap_phase(data):
 
     new_data = np.copy(data)
     if 'phase_deg' in data.dtype.names:
-        if max(data['phase_deg']) < 180.0 and min(data['phase_deg']) > -180.0:
+        if np.amax(data['phase_deg']) < 180.0 and np.amin(data['phase_deg']) > -180.0:
             for num, entry in enumerate(data['phase_deg']):
                 if entry > 250.0 + data['phase_deg'][num - 1]:
                     for i in range(num, len(data)):
@@ -28,7 +28,7 @@ def unwrap_phase(data):
                     for i in range(num, len(data)):
                         new_data['phase_deg'][i] += 360.0
     if 'phase' in data.dtype.names:
-        if max(data['phase']) < 180.0 and min(data['phase']) > -180.0:
+        if np.amax(data['phase']) < 180.0 and np.amin(data['phase']) > -180.0:
             for num, entry in enumerate(data['phase']):
                 if entry > (250.0 + data['phase'][num - 1]):
                     for i in range(num, len(new_data)):
@@ -37,7 +37,7 @@ def unwrap_phase(data):
                     for i in range(num, len(new_data)):
                         new_data['phase'][i] += 360.0
     if 'phase_rad' in data.dtype.names:
-        if max(data['phase_rad']) < math.pi and min(data['phase_rad']) > -math.pi:
+        if np.amax(data['phase_rad']) < math.pi and np.amin(data['phase_rad']) > -math.pi:
             for num, entry in enumerate(data['phase_rad']):
                 if entry > (250.0 * math.pi / 180.0) + data['phase_rad'][num - 1]:
                     for i in range(num, len(data)):
@@ -60,7 +60,7 @@ def wrap_phase(data):
 
     new_data = np.copy(data)
     if 'phase' in data.dtype.names:
-        if max(data['phase']) > 180.0 or min(data['phase']) < -180.0:
+        if np.amax(data['phase']) > 180.0 or np.amin(data['phase']) < -180.0:
             for num, entry in enumerate(new_data['phase']):
                 if entry > 180.0:
                     for i in range(num, len(new_data)):
@@ -69,7 +69,7 @@ def wrap_phase(data):
                     for i in range(num, len(new_data)):
                         new_data['phase'][i] = new_data['phase'][i] + 360.0
     if 'phase_deg' in data.dtype.names:
-        if max(data['phase_deg']) > 180.0 or min(data['phase_deg']) < -180.0:
+        if np.amax(data['phase_deg']) > 180.0 or np.amin(data['phase_deg']) < -180.0:
             for num, entry in enumerate(new_data['phase_deg']):
                 if entry > 180.0:
                     for i in range(num, len(new_data)):
@@ -78,7 +78,7 @@ def wrap_phase(data):
                     for i in range(num, len(new_data)):
                         new_data['phase_deg'][i] = new_data['phase_deg'][i] + 360.0
     if 'phase_rad' in data.dtype.names:
-        if max(data['phase_rad']) > math.pi or min(data['phase_rad']) < -math.pi:
+        if np.amax(data['phase_rad']) > math.pi or np.amin(data['phase_rad']) < -math.pi:
             for num, entry in enumerate(new_data['phase_rad']):
                 if entry > math.pi:
                     for i in range(num, len(new_data)):
@@ -104,9 +104,10 @@ def wrap_phase_dictionary(dict_with_freq_and_phase):
     return new_dict
 
 
-def check_frequency_array(dict_of_arrays_with_freq_dtype, min_dataset_length, freqs=None):
+def reduce_frequency_array(dict_of_arrays_with_freq_dtype, min_dataset_length,
+                           freqs=None):
     """
-    Check dictionary where values are numpy arrays (1-dimensional, multiple dtypes with one dtype 
+    Check dictionary where values are numpy arrays (multiple dtypes with one dtype 
     being 'freq'). Check that the arrays are of the same length. If they are of lengths that are 
     multiples, make the frequency values equal by removing the multiples and making all arrays the 
     minimum dataset length. If they are not multiples, return an error. pass in an array of only
@@ -118,7 +119,7 @@ def check_frequency_array(dict_of_arrays_with_freq_dtype, min_dataset_length, fr
         short dataset.
     :return: dict_of_arrays_with_freq_dtype, where all arrays are of same length.
     """
-    short_datasets = []
+    short_datasets = []  # list of keys with the minimum dataset length
     long_datasets = {}
     for ant, dataset in dict_of_arrays_with_freq_dtype.items():
         if len(dataset) == min_dataset_length:
@@ -131,9 +132,11 @@ def check_frequency_array(dict_of_arrays_with_freq_dtype, min_dataset_length, fr
     else:
         reference_frequency = freqs
 
+    # Check if all the short datasets have the same values for frequency.
     for ant in short_datasets:
         for value, entry in enumerate(dict_of_arrays_with_freq_dtype[ant]):
-            if entry['freq'] != reference_frequency[value]:
+            #print(entry['freq'] - reference_frequency[value])
+            if not np.array_equal(entry['freq'], reference_frequency[value]):
                 sys.exit('Frequencies do not match in datasets - exiting')
 
     for ant, length in long_datasets.items():
@@ -142,7 +145,6 @@ def check_frequency_array(dict_of_arrays_with_freq_dtype, min_dataset_length, fr
             integer = length/min_dataset_length
             for value, entry in enumerate(dict_of_arrays_with_freq_dtype[ant]):
                 if (value-1) % integer != 0:
-                    #print entry['freq']
                     lines_to_delete.append(value)
                 elif entry['freq'] != reference_frequency[(value-1)/integer]:
                     sys.exit('Datasets are in multiple lengths but frequency axis '
@@ -157,7 +159,7 @@ def check_frequency_array(dict_of_arrays_with_freq_dtype, min_dataset_length, fr
     return dict_of_arrays_with_freq_dtype
 
 
-def correct_frequency_array(dict_of_arrays_with_freq_dtype):
+def interp_frequency_array(dict_of_arrays_with_freq_dtype):
     """
     Make all arrays in the dictionary the same length and with the same array as the 'freq' dtype,
     using linear interpolation for all dtypes except the 'freq' dtype. This returns all datasets 
@@ -245,7 +247,7 @@ def combine_arrays(array_dict):  # TODO check this
     Combine arrays with the same 'freq' dtype array by adding all arrays in the dictionary into one 
     numpy array. Input dictionary value arrays need a phase_rad dtype and a magnitude dtype at this time.
     :param array_dict: 
-    :return: combined_array
+    :return: combined_array, which has unwrapped phase.
     """
     one_array_key = random.choice(list(array_dict.keys()))
 
@@ -303,7 +305,7 @@ def reflection_to_transmission_phase(incoming_data):
     :return: 
     """
 
-    data = unwrap_phase(incoming_data) # needs to be a phase-unwrapped dataset.
+    data = unwrap_phase(incoming_data)  # needs to be a phase-unwrapped dataset.
 
     try:
         assert 'phase' in data.dtype.names or 'phase_deg' in data.dtype.names or 'phase_rad' in data.dtype.names
@@ -318,3 +320,16 @@ def reflection_to_transmission_phase(incoming_data):
     if 'phase_rad' in data.dtype.names:
         new_data['phase_rad'] = np.true_divide(new_data['phase_rad'], 2.0)
     return new_data
+
+
+def get_min_dataset_length(data_dict):
+    """
+    Get the minimum dataset length
+    :param data_dict: 
+    :return: 
+    """
+    min_dataset_length = 10000000000
+    for antenna, dataset in data_dict.items():
+        if len(dataset) < min_dataset_length:
+            min_dataset_length = len(dataset)
+    return min_dataset_length
