@@ -1,13 +1,13 @@
 #!/usr/bin/python3
 
 # array_feedline_paths.py
-# To measure the phase offset in cables, antennas
-# using S11 phase measurements and VSWR. Approximate
-# S12 phase change at the antenna is found assuming S12 = S21.
-# We then plot the estimated phase change at the end of the feedline
-# Simply due to feedline and antenna disparities.
+# Plot the VSWR information for feedlines and antennas and
+# use this information to estimate a phase delay value for the
+# antenna and feedline path in a single direction.
+# Approximate S12 phase change at the antenna is found assuming S12 = S21.
 
 import sys
+import argparse
 import time
 import random
 import fnmatch
@@ -15,58 +15,78 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
-import json
-import csv
 
-from dataset_operations.dataset_operations import wrap_phase, unwrap_phase, \
-    reduce_frequency_array, combine_arrays, reflection_to_transmission_phase, \
-    get_min_dataset_length
+import dataset_operations.dataset_operations as do
+import retrieve_data.retrieve_data as retrieve
 
-from retrieve_data.retrieve_data import retrieve_data_from_csv, vswr_to_receive_power, \
-    get_cable_loss_array
 
-# General variables to change depending on data being used
-radar_name = sys.argv[1]
-data_location = sys.argv[2]
-plot_location = sys.argv[3]
-vswr_files_str = sys.argv[4]
-time_file_str = sys.argv[5]
-time_file_loc = 'numpy_channel_data/'
-path_type = 'antenna-feedline'
+def usage_msg():
+    """
+    Return the usage message for this script.
 
-plot_filename = radar_name + ' antenna-feedlines-path.png'
-plot_title = radar_name + ' Antennas/Feedlines Path'
+    This is used if a -h flag or invalid arguments are provided.
 
-print(radar_name, data_location, plot_location, vswr_files_str, plot_filename)
+    :return: the usage message
+    """
 
-sys.path.append(data_location)
+    usage_message = """ array_feedline_paths.py [-h] radar_name data_location 
+    plot_location vswr_files_str time_file_str   
+    
+    This script is intended for use with VSWR data of some length of feedline leading 
+    up to the SuperDARN antenna. A single direction phase path (S12) is estimated from 
+    the return path of the VSWR data (S11). This is used to determine the phase delay 
+    from the signal incident at the antenna to the end of the feedline. This data can be 
+    combined with other phase path data to estimate the entire path's phase delay. 
+    
+    Data provided to this script should include 'VSWR', 'Phase', and 'Freq'. This 
+    script is set up to retrieve this data from csv's produced by ZVHView after being 
+    recorded by a Rohde & Schwarz ZVH4. 
+    """
 
-# if we assume S12 and S21 are the same (safe for feedlines/antennas only)
-# We can assume that S21 phase is S11 phase/2
-# We can assume that the transmitted power T12 will be equal to (incident power - cable losses on
-# incident)- (S11 (reflected power) + cable losses on reflect)
+    return usage_message
 
-# estimated cable losses (LMR-400) @ 0.7 db/100ft * 600ft
-if 'Saskatoon' in radar_name or 'sas' in radar_name or 'SAS' in radar_name:
-    cable_type = 'Belden8237'
-    cable_length = 600.0 # ft
-elif 'Prince George' in radar_name or 'Prince_George' in radar_name or 'pgr' in radar_name or \
-                'PGR' in radar_name:
-    cable_type = 'Belden8237' # TODO correct these two values
-    cable_length = 600.0 # ft
-elif 'Inuvik' in radar_name or 'inv' in radar_name or 'INV' in radar_name:
-    cable_type = 'Belden8237' # TODO correct these two values
-    cable_length = 600.0 # ft
-elif 'Rankin Inlet' in radar_name or 'Rankin_Inlet' in radar_name or 'rkn' in radar_name or \
-                'RKN' in radar_name or 'Rankin-Inlet' in radar_name:
-    cable_type = 'C1180'
-    cable_length = 600.0 # ft TODO verify cable length
-elif 'Clyde River' in radar_name or 'Clyde_River' in radar_name or 'cly' in radar_name or \
-                'CLY' in radar_name or 'Clyde-River' in radar_name:
-    cable_type = 'LMR400'
-    cable_length = 600.0 # ft TODO verify cable length
-else:
-    sys.exit('Not a valid radar name.')
+
+def script_parser():
+    """
+    Creates the parser to retrieve the arguments.
+
+    :return: parser, the argument parser for this script.
+    """
+
+    radar_name_help = "Name of the radar, appears in plot title and filename. Limited " +\
+                      "to  Canadian SuperDARN radars at this time in order to give " +\
+                      "accurate cable loss models. "
+
+    data_location_help = "Path location of the data files. Data filenames are provided" +\
+                         "in the vswr_files_str. "
+
+    plot_location_help = "Path location of where to place the plots produced in this " +\
+                         "script."
+
+    vswr_files_str_help = "The name of a json file that is mapping the path names to " +\
+                        " the data filename for that path. All path names should begin" +\
+                        "with an 'M' or 'I' to signify main or interferometer array. " +\
+                        "There can also be a _comment key to leave a data_description " +\
+                        "string on the plot. This file should be in the plot_location " +\
+                        "path. All data files referenced in this file should be " +\
+                        "located in the data_location path. "
+
+    time_file_str_help = "The name of the file in which to record the difference " +\
+                         "between main and interferometer arrays. This would be a " +\
+                         "numpy array write to file with dtypes 'freq', 'phase_deg', " +\
+                         "and 'time_ns'. This file would be written in the " +\
+                         "plot_location, under a sub-directory numpy_channel_data."
+
+    parser = argparse.ArgumentParser(usage=usage_msg())
+    parser.add_argument("radar_name", help=radar_name_help)
+    parser.add_argument("data_location", help=data_location_help)
+    parser.add_argument("plot_location", help=plot_location_help)
+    parser.add_argument("vswr_files_str", help=vswr_files_str_help)
+    parser.add_argument("-tdiff", "--record-tdiff", nargs='?',
+                        const='delays.txt', default=None, help=time_file_str_help)
+
+    return parser
+
 
 # receive power will be calculated from transmit power losses.
 # transmit S21 = (incident-cable losses)-(S11+cable losses)
@@ -83,131 +103,117 @@ else:
 
 def main():
 
+    parser = script_parser()
+    args = parser.parse_args()
+
+    # Get the args so we can retrieve the data and plot in the correct location.
+    radar_name = args.radar_name
+    data_location = args.data_location
+    plot_location = args.plot_location
+    vswr_files_str = args.vswr_files_str
+    time_file_str = args.record_tdiff
+    time_file_loc = 'numpy_channel_data/'
+    path_type = 'antenna-feedline'
+
+    plot_filename = radar_name + '-antenna-feedlines-path.png'
+    plot_title = radar_name + ' Antennas/Feedlines Path'
+
+    print('\nPlotting for {radar_name}\nUsing data from {data_location}\n'
+          'Plots will be placed in {plot_location}\n'
+          'Plot name is {plot_filename}\n'
+          'Data used from mapping in {vswr_files_str}\n'.format(radar_name=radar_name,
+                                                                data_location=data_location,
+                                                                plot_location=plot_location,
+                                                                plot_filename=plot_filename,
+                                                                vswr_files_str=vswr_files_str))
+
+    sys.path.append(data_location)
+
+    #
+    # Get the cable model depending on the site being analyzed.
+    if 'Saskatoon' in radar_name or 'sas' in radar_name or 'SAS' in radar_name:
+        cable_type = 'Belden8237'  # known
+        cable_length = 600.0  # ft
+    elif 'Prince George' in radar_name or 'Prince_George' in radar_name or 'pgr' in radar_name or \
+            'PGR' in radar_name:
+        cable_type = 'Belden8237'  # TODO correct these two values
+        cable_length = 600.0  # ft
+    elif 'Inuvik' in radar_name or 'inv' in radar_name or 'INV' in radar_name:
+        cable_type = 'Belden8237'  # TODO correct these two values
+        cable_length = 600.0  # ft
+    elif 'Rankin Inlet' in radar_name or 'Rankin_Inlet' in radar_name or 'rkn' in radar_name or \
+            'RKN' in radar_name or 'Rankin-Inlet' in radar_name:
+        cable_type = 'C1180'  # known checked 2018
+        cable_length = 600.0  # ft TODO verify cable length
+    elif 'Clyde River' in radar_name or 'Clyde_River' in radar_name or 'cly' in radar_name or \
+            'CLY' in radar_name or 'Clyde-River' in radar_name:
+        cable_type = 'LMR400'  # known
+        cable_length = 600.0  # ft TODO verify cable length
+    else:
+        sys.exit('Not a valid radar name.')
+
+
     dtypes_dict = {'freq': 'Freq*', 'vswr': 'VSWR*', 'phase_deg': 'Phase*'}
     all_data_phase_wrapped = {}
     raw_data, colour_dictionary, missing_data, data_description = \
-        retrieve_data_from_csv(plot_location + vswr_files_str, data_location, dtypes_dict)
+        retrieve.retrieve_data_from_csv(plot_location + vswr_files_str, data_location,
+                                dtypes_dict)
 
-    min_dataset_length = get_min_dataset_length(raw_data)
+    # Check and correct frequency array if required so all datasets are the same length
+    #  with same frequency values.
+    do.reduce_frequency_array(raw_data)
 
-    # Check and correct frequency array if required.
-    reduce_frequency_array(raw_data, min_dataset_length)
-
-    # Get cable loss
+    # Get cable loss - this contains a loss value for all frequencies in the
+    # reference_frequency list, which should directly correspond to all datasets in the
+    # recorded datasets dictionary (raw_data).
     one_array_key = random.choice(list(raw_data.keys()))
     reference_frequency = list(raw_data[one_array_key]['freq'])
-    cable_loss_dataset = get_cable_loss_array(reference_frequency, cable_length,
+    cable_loss_dataset = retrieve.get_cable_loss_array(reference_frequency, cable_length,
                                               cable_type)
 
-    # get magnitude from VSWR data.
     for antenna, dataset in raw_data.items():
-        dataset = vswr_to_receive_power(dataset, cable_loss_dataset)
-
-        # Wrapping then unwrapping ensures there is no 360 degree offset.
-        new_dataset = wrap_phase(dataset)
-        new_dataset = reflection_to_transmission_phase(new_dataset)
-        # now half the phase for single-direction - unwraps within function.
-
+        # get estimated magnitude (dB loss) of single direction signal incident on the
+        # balun when it reaches the end of the feedline.
+        dataset_with_transmission_data = do.vswr_to_single_receive_direction(
+            dataset, cable_loss_dataset)
         # Wrapping the new data with new phase for single direction.
-        phase_wrapped_data = wrap_phase(new_dataset)
+        phase_wrapped_data = do.wrap_phase(dataset_with_transmission_data)
         all_data_phase_wrapped[antenna] = phase_wrapped_data
 
     for ant, dataset in raw_data.items():
-        raw_data[ant] = wrap_phase(dataset)  # Wrap for plotting
+        raw_data[ant] = do.wrap_phase(dataset)  # Wrap for plotting
 
     all_data = {}
-    # Also get data that is not phase_wrapped for calculation purposes.
+    # Also store data that is not phase wrapped for other calculations.
     for ant, dataset in all_data_phase_wrapped.items():
-        all_data[ant] = unwrap_phase(dataset)
+        all_data[ant] = do.unwrap_phase(dataset)
 
     ######################################################################################
-    # Getting the line of best fit for each antenna and the combined arrays.
-    # Getting the offset from the line of best fit for each antenna and array.
+    # Getting the line of best fit for each antenna and the combined arrays,
+    # and the offset from the line of best fit for each antenna and array.
     linear_fit_dict = {}
     for ant, dataset in all_data.items():
-        slope, intercept, rvalue, pvalue, stderr = stats.linregress(dataset['freq'],
-                                                                    dataset['phase_rad'])
-        linear_fit_dict[ant] = {'slope': slope, 'intercept': intercept, 'rvalue': rvalue,
-                                'pvalue': pvalue, 'stderr': stderr}
-        offset_of_best_fit = []
-        best_fit_line = []
-        for entry in dataset:
-            best_fit_value = slope * entry['freq'] + intercept
-            offset_of_best_fit.append(entry['phase_rad'] - best_fit_value)
-            best_fit_line.append(best_fit_value)
-        best_fit_line = np.array(best_fit_line, dtype=[('phase_rad', 'f4')])
-        best_fit_line = wrap_phase(best_fit_line)
-        offset_of_best_fit = np.array(offset_of_best_fit, dtype=[('phase_rad', 'f4')])
-        offset_of_best_fit = wrap_phase(offset_of_best_fit)
-        linear_fit_dict[ant]['offset_of_best_fit_rads'] = offset_of_best_fit['phase_rad']
-        linear_fit_dict[ant]['time_delay_ns'] = round(slope / (2 * math.pi), 11) * -10 ** 9
-        linear_fit_dict[ant]['best_fit_line_rads'] = best_fit_line
-        linear_fit_dict[ant]['best_fit_line_rads'] = wrap_phase(linear_fit_dict[ant][
-                                                               'best_fit_line_rads'])
-
+        linear_fit_dict[ant] = do.create_linear_fit_dictionary(dataset)
 
     # Get all main and interferometer keys
     main_data = {}
     intf_data = {}
     for ant in all_data.keys():
-        if ant[0] == 'M':
+        if ant[0] == 'M':  # main
             main_data[ant] = all_data[ant]
-        elif ant[0] == 'I':
+        elif ant[0] == 'I':  # interferometer
             intf_data[ant] = all_data[ant]
 
     # Combine_arrays returns unwrapped dataset.
-    unwrapped_main_array = combine_arrays(main_data)
-    unwrapped_intf_array = combine_arrays(intf_data)
+    unwrapped_main_array = do.combine_arrays(main_data)
+    unwrapped_intf_array = do.combine_arrays(intf_data)
 
     # Wrapping after unwrapping ensures the first values in array are within -pi to pi.
-    combined_main_array = wrap_phase(unwrapped_main_array)
-    combined_intf_array = wrap_phase(unwrapped_intf_array)
+    combined_main_array = do.wrap_phase(unwrapped_main_array)
+    combined_intf_array = do.wrap_phase(unwrapped_intf_array)
 
-    # combined main array slope
-    slope, intercept, rvalue, pvalue, stderr = stats.linregress(unwrapped_main_array[
-                                                                    'freq'],
-                                                                unwrapped_main_array[
-                                                                    'phase_rad'])
-    offset_of_best_fit = []
-    best_fit_line = []
-    for entry in unwrapped_main_array:
-        best_fit_value = slope * entry['freq'] + intercept
-        offset_of_best_fit.append(entry['phase_rad'] - best_fit_value)
-        best_fit_line.append(best_fit_value)
-    best_fit_line = np.array(best_fit_line, dtype=[('phase_rad', 'f4')])
-    best_fit_line = wrap_phase(best_fit_line)
-    offset_of_best_fit = np.array(offset_of_best_fit, dtype=[('phase_rad', 'f4')])
-    offset_of_best_fit = wrap_phase(offset_of_best_fit)
-    linear_fit_dict['M_all'] = {'slope': slope, 'intercept': intercept, 'rvalue': rvalue,
-                                'pvalue': pvalue, 'stderr': stderr,
-                                'offset_of_best_fit_rads': offset_of_best_fit[
-                                    'phase_rad'],
-                                'time_delay_ns': round(slope / (2 * math.pi), 11) * -10
-                                                                                     ** 9,
-                                'best_fit_line_rads': best_fit_line}
-
-    # combined intf array slope
-    slope, intercept, rvalue, pvalue, stderr = stats.linregress(unwrapped_intf_array[
-                                                                    'freq'],
-                                                                unwrapped_intf_array[
-                                                                    'phase_rad'])
-    offset_of_best_fit = []
-    best_fit_line = []
-    for entry in unwrapped_intf_array:
-        best_fit_value = slope * entry['freq'] + intercept
-        offset_of_best_fit.append(entry['phase_rad'] - best_fit_value)
-        best_fit_line.append(best_fit_value)
-    best_fit_line = np.array(best_fit_line, dtype=[('phase_rad', 'f4')])
-    best_fit_line = wrap_phase(best_fit_line)
-    offset_of_best_fit = np.array(offset_of_best_fit, dtype=[('phase_rad', 'f4')])
-    offset_of_best_fit = wrap_phase(offset_of_best_fit)
-    linear_fit_dict['I_all'] = {'slope': slope, 'intercept': intercept, 'rvalue': rvalue,
-                                'pvalue': pvalue, 'stderr': stderr,
-                                'offset_of_best_fit_rads': offset_of_best_fit[
-                                    'phase_rad'],
-                                'time_delay_ns': round(slope / (2 * math.pi), 11) * -10
-                                                                                     ** 9,
-                                'best_fit_line_rads': best_fit_line}
+    linear_fit_dict['M_all'] = do.create_linear_fit_dictionary(unwrapped_main_array)
+    linear_fit_dict['I_all'] = do.create_linear_fit_dictionary(unwrapped_intf_array)
 
     ######################################################################################
     # Computing the phase difference between the arrays and
@@ -215,20 +221,26 @@ def main():
     array_diff_raw = []
     for m, i in zip(unwrapped_main_array, unwrapped_intf_array):
         freq = i['freq']
-        phase = (m['phase_deg'] - i['phase_deg'])
-        array_diff_raw.append((freq, phase, 0.0))
+        phase_diff = (m['phase_deg'] - i['phase_deg'])
+        array_diff_raw.append((freq, phase_diff, 0.0))
     array_diff_raw = np.array(array_diff_raw, dtype=[('freq', 'i4'), ('phase_deg', 'f4'),
                                              ('time_ns', 'f4')])
 
-    array_diff = wrap_phase(array_diff_raw)
+    array_diff = do.wrap_phase(array_diff_raw)
 
     # Now insert the tdiff in ns after the phase has been wrapped.
+    # This is the time difference between the signal incident on the main array
+    # antennas reaching the end of the feedlines and the interferometer array signal
+    # reaching the end of the feedlines. This is a portion of the entire path from
+    # antennas to receiver. The entire path's time difference is a calibrated value
+    # used in SuperDARN data analysis, and is assumed to be constant across the
+    # frequency spectrum, as would be expected if the path was completely linear (such
+    # as a cable).
     for dp in array_diff:
         freq = dp['freq']
         phase = dp['phase_deg']
-        time_ns = phase * 10**9 / (freq * 360.0)
+        time_ns = phase * 1e9 / (freq * 360.0)
         dp['time_ns'] = time_ns
-
 
     ######################################################################################
     # Writing the array difference and combined arrays to file
