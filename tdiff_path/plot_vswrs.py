@@ -15,7 +15,10 @@ from scipy import stats
 import json
 import csv
 
-from dataset_operations.dataset_operations import check_frequency_array
+sys.path.append('/home/shared/code/radar-test-plots/tdiff_path')
+
+from dataset_operations.dataset_operations import reduce_frequency_array, wrap_phase, \
+    unwrap_phase
 
 # General variables to change depending on data being used
 radar_name = sys.argv[1]  # eg. Inuvik
@@ -25,7 +28,7 @@ vswr_files_str = sys.argv[4]  # eg. 'vswr-files.json' - must be located in plot_
 #vswr_intf_files_str = sys.argv[5]  # eg. 'vswr-intf-files.json' - must be location in plot_location.
 plot_filename = radar_name + ' vswrs.png'
 
-print radar_name, data_location, plot_location, vswr_files_str, plot_filename
+print(radar_name, data_location, plot_location, vswr_files_str, plot_filename)
 
 # number_of_data_points = 801
 vswrs_plot_title = radar_name + ' Feedline to Antenna Standing Wave Ratios'
@@ -50,8 +53,7 @@ def main():
     data_description = []
     missing_data = []
     all_data = {}
-    min_dataset_length = 100000  # won't be this high
-    for ant, v in all_files.iteritems():
+    for ant, v in all_files.items():
         if ant == '_comment':
             data_description = v
             continue
@@ -80,7 +82,7 @@ def main():
                 phase_column = phase_columns[0]
                 if (abs(vswr_column - freq_column) > 2) or (
                             abs(phase_column - freq_column) > 2):
-                    print freq_column, vswr_column, phase_column
+                    print(freq_column, vswr_column, phase_column)
                     sys.exit('Data Phase and VSWR are given from different sweeps - please'
                                  'check data file so first sweep has SWR and Phase info.')
             except:
@@ -100,14 +102,20 @@ def main():
                     continue
             data = np.array(data, dtype=[('freq', 'i4'), ('VSWR', 'f4'), ('phase', 'f4')])
 
-            if len(data) < min_dataset_length:
-                min_dataset_length = len(data)
-
             all_data[ant] = data
             hex_dictionary[ant] = hex_colors[0]
             hex_colors.remove(hex_dictionary[ant])
 
-    all_data = check_frequency_array(all_data, min_dataset_length)
+    all_data = reduce_frequency_array(all_data)
+
+    all_data_phase_wrapped = {}
+    for ant, dataset in all_data.items():
+        all_data_phase_wrapped[ant] = wrap_phase(dataset)
+
+    for ant, dataset in all_data_phase_wrapped.items():
+        all_data[ant] = unwrap_phase(dataset)  # wrapping then unwrapping allows us to
+        # get rid of any 360 degree offset in the measurements.
+
 
     max_phase = list(all_data['M0']['phase'])
     min_phase = list(all_data['M0']['phase'])
@@ -136,11 +144,18 @@ def main():
         linear_fit_dict[ant] = {'slope': slope, 'intercept': intercept, 'rvalue': rvalue,
                                 'pvalue': pvalue, 'stderr': stderr}
         offset_of_best_fit = []
+        best_fit_line = []
         for entry in dataset:
             best_fit_value = slope * entry['freq'] + intercept
             offset_of_best_fit.append(entry['phase'] - best_fit_value)
-        linear_fit_dict[ant]['offset_of_best_fit'] = offset_of_best_fit
-
+            best_fit_line.append(best_fit_value)
+        best_fit_line = np.array(best_fit_line, dtype=[('phase', 'f4')])
+        offset_of_best_fit = np.array(offset_of_best_fit, dtype=[('phase', 'f4')])
+        offset_of_best_fit = wrap_phase(offset_of_best_fit)
+        linear_fit_dict[ant]['offset_of_best_fit'] = offset_of_best_fit['phase']
+        linear_fit_dict[ant]['best_fit_line'] = best_fit_line
+        linear_fit_dict[ant]['best_fit_line'] = wrap_phase(linear_fit_dict[ant][
+                                                               'best_fit_line'])
 
     # find top antennas with highest phase offsets and plot those antennas SWR
     furthest_phase_offset = {}
@@ -156,24 +171,33 @@ def main():
         worst_swrs.append(max(furthest_phase_offset, key=lambda key: furthest_phase_offset[key]))
         del furthest_phase_offset[worst_swrs[-1]]
 
-    numplots = 5
-    fig, smpplot = plt.subplots(numplots, sharex=True, figsize=(16,22))
+    worst_swrs_phase_offset = {}
+    for antenna in worst_swrs:
+        phase_offset_list = all_data[antenna]['phase'] - phase_ave
+        worst_swrs_phase_offset[antenna] = np.array(phase_offset_list, dtype=[('phase',
+                                                                               'f4')])
+        worst_swrs_phase_offset[antenna] = wrap_phase(worst_swrs_phase_offset[antenna])
+
+    numplots = 6
+    fig, smpplot = plt.subplots(numplots, sharex=True, figsize=(16, 22), dpi=80)
     xmin, xmax, ymin, ymax = smpplot[0].axis(xmin=8e6, xmax=20e6)
     smpplot[0].set_title(vswrs_plot_title, size=30, linespacing=1.3)
+    for ant, dataset in all_data_phase_wrapped.items():
+        smpplot[0].plot(dataset['freq'], dataset['phase'], label=ant,
+                    color=hex_dictionary[ant])
     for ant, dataset in all_data.items():
-        smpplot[0].plot(dataset['freq'], dataset['phase'], label=ant, color=hex_dictionary[ant])
         smpplot[1].plot(dataset['freq'], dataset['VSWR'], label=ant, color=hex_dictionary[ant])
         smpplot[4].plot(dataset['freq'], linear_fit_dict[ant]['offset_of_best_fit'],
                         label='{}, stderr={}'.format(ant,round(linear_fit_dict[ant]['stderr'], 9)),
                         color=hex_dictionary[ant])
-    smpplot[2].plot(all_data['M0']['freq'], diff_phase, label='Max-Min Difference',
-                    color=hex_dictionary['other'])
+    # smpplot[2].plot(all_data['M0']['freq'], diff_phase, label='Max-Min Difference',
+    #                 color=hex_dictionary['other'])
     smpplot[3].plot(all_data['M0']['freq'], swr_ave, label='Average SWR',
                     color=hex_dictionary['other'])
     for antenna in worst_swrs:
         smpplot[3].plot(all_data[antenna]['freq'], all_data[antenna]['VSWR'], label=antenna,
                         color=hex_dictionary[antenna])
-        smpplot[2].plot(all_data[antenna]['freq'], all_data[antenna]['phase'] - phase_ave,
+        smpplot[2].plot(all_data[antenna]['freq'], worst_swrs_phase_offset[antenna],
                         label=antenna, color=hex_dictionary[antenna])
     smpplot[4].set_xlabel('Frequency (Hz)', size='xx-large')
     smpplot[0].set_ylabel('Phase [degrees]', size='xx-large')
@@ -184,20 +208,20 @@ def main():
         smpplot[i].grid()
     smpplot[2].legend(fontsize=10)
     smpplot[3].legend(fontsize=10)
-    smpplot[4].legend(fontsize=7)
+    smpplot[4].legend(fontsize=7, loc='upper right', ncol=3)
     smpplot[4].set_ylabel('Phase Offsets from\nLine of Best Fit', size='xx-large')
     #plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
     #           ncol=2, mode="expand", borderaxespad=0.)
-    print "plotting"
+    print("plotting")
     if missing_data:  # not empty
         missing_data_statement = "***MISSING DATA FROM ANTENNA(S) "
         for element in missing_data:
             missing_data_statement = missing_data_statement + element + " "
-        print missing_data_statement
+        print(missing_data_statement)
         plt.figtext(0.65, 0.05, missing_data_statement, fontsize=15)
 
     if data_description:
-        print data_description
+        print(data_description)
         plt.figtext(0.65, 0.10, data_description, fontsize=15)
 
     fig.savefig(plot_location + plot_filename)

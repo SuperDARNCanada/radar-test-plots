@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 # plot_reflection.py
 # To plot all reflection data on the same plot.
@@ -15,7 +15,7 @@ from scipy import stats
 import json
 import csv
 
-from dataset_operations.dataset_operations import check_frequency_array
+from dataset_operations.dataset_operations import reduce_frequency_array
 
 # General variables to change depending on data being used
 radar_name = sys.argv[1]  # eg. Inuvik
@@ -25,7 +25,7 @@ vswr_files_str = sys.argv[4]  # eg. 'vswr-files.json' - must be located in plot_
 #vswr_intf_files_str = sys.argv[5]  # eg. 'vswr-intf-files.json' - must be location in plot_location.
 plot_filename = radar_name + ' vswrs.png'
 
-print radar_name, data_location, plot_location, vswr_files_str, plot_filename
+print(radar_name, data_location, plot_location, vswr_files_str, plot_filename)
 
 # number_of_data_points = 801
 vswrs_plot_title = radar_name + ' Antenna Reflection'
@@ -51,7 +51,7 @@ def main():
     missing_data = []
     all_data = {}
     min_dataset_length = 100000  # won't be this high
-    for ant, v in all_files.iteritems():
+    for ant, v in all_files.items():
         if ant == '_comment':
             data_description = v
             continue
@@ -80,7 +80,7 @@ def main():
                 phase_column = phase_columns[0]
                 if (abs(mag_column - freq_column) > 2) or (
                             abs(phase_column - freq_column) > 2):
-                    print freq_column, mag_column, phase_column
+                    print(freq_column, mag_column, phase_column)
                     sys.exit('Data Phase and VSWR are given from different sweeps - please'
                                  'check data file so first sweep has SWR and Phase info.')
             except:
@@ -107,7 +107,7 @@ def main():
             hex_dictionary[ant] = hex_colors[0]
             hex_colors.remove(hex_dictionary[ant])
 
-    all_data = check_frequency_array(all_data, min_dataset_length)
+    all_data = reduce_frequency_array(all_data, min_dataset_length)
 
     max_phase = list(all_data['M0']['phase'])
     min_phase = list(all_data['M0']['phase'])
@@ -188,16 +188,16 @@ def main():
     smpplot[4].set_ylabel('Phase Offsets from\nLine of Best Fit', size='xx-large')
     #plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
     #           ncol=2, mode="expand", borderaxespad=0.)
-    print "plotting"
+    print("plotting")
     if missing_data:  # not empty
         missing_data_statement = "***MISSING DATA FROM ANTENNA(S) "
         for element in missing_data:
             missing_data_statement = missing_data_statement + element + " "
-        print missing_data_statement
+        print(missing_data_statement)
         plt.figtext(0.65, 0.05, missing_data_statement, fontsize=15)
 
     if data_description:
-        print data_description
+        print(data_description)
         plt.figtext(0.65, 0.10, data_description, fontsize=15)
 
     fig.savefig(plot_location + plot_filename)

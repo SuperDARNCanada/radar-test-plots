@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 # transmitter_paths.py
 # To find the phase paths through the transmitters and the equivalent
@@ -15,7 +15,8 @@ from scipy import stats
 import json
 import csv
 
-from dataset_operations.dataset_operations import check_frequency_array, combine_arrays, unwrap_phase
+from dataset_operations.dataset_operations import reduce_frequency_array, \
+    combine_arrays, unwrap_phase
 
 # General variables to change depending on data being used
 radar_name = sys.argv[1]
@@ -24,11 +25,12 @@ plot_location = sys.argv[3]
 path_file_str = sys.argv[4]
 time_file_str = sys.argv[5]
 time_file_loc = 'numpy_channel_data/'
+path_type = 'tx-rcv'
 
 plot_filename = radar_name + ' transmitter-path.png'
 plot_title = radar_name + ' Transmitter Paths'
 
-print radar_name, data_location, plot_location, path_file_str, plot_filename
+print(radar_name, data_location, plot_location, path_file_str, plot_filename)
 
 sys.path.append(data_location)
 
@@ -48,8 +50,7 @@ def main():
     estimate_data = []
     main_data = {}
     intf_data = {}
-    min_dataset_length = 100000  # just a big number
-    for k, v in path_files.iteritems():
+    for k, v in path_files.items():
         if k == '_comment':
             data_description = v
             continue
@@ -110,9 +111,6 @@ def main():
 
             data = unwrap_phase(data)
 
-            if len(data) < min_dataset_length:
-                min_dataset_length = len(data)
-
             if k[0] == 'M':  # in main files.
                 main_data[k] = data
             elif k[0] == 'I':  # in intf files
@@ -123,7 +121,10 @@ def main():
             hex_dictionary[k] = hex_colors[0]
             hex_colors.remove(hex_dictionary[k])
 
-    check_frequency_array(main_data, min_dataset_length)
+    main_data = reduce_frequency_array(main_data)
+
+    one_array_key = random.choice(list(main_data.keys()))
+    main_dataset_length = main_data[one_array_key].shape[0]
     combined_main_array = combine_arrays(main_data)
 
     linear_fit_dict = {}
@@ -143,8 +144,8 @@ def main():
     if not intf_data:  # if empty
         if estimate_data:  # if not empty
             data = []
-            for i in range(0, min_dataset_length):
-                freq = 8000000 + (12000000/(min_dataset_length - 1)) * i
+            for i in range(0, main_dataset_length):
+                freq = 8000000 + (12000000/(main_dataset_length - 1)) * i
                 phase_rad = slope * freq + intercept
                 phase_deg = phase_rad * 180.0 / math.pi
                 data.append((freq, 0.0, phase_deg, phase_rad))
@@ -154,15 +155,15 @@ def main():
             hex_colors.remove(hex_dictionary['I0'])
         else:
             data = []
-            for i in range(0, min_dataset_length):
-                freq = 8000000 + (12000000/(min_dataset_length - 1)) * i
+            for i in range(0, main_dataset_length):
+                freq = 8000000 + (12000000/(main_dataset_length - 1)) * i
                 data.append((freq, 0.0, 0.0, 0.0))
             intf_data = {'I0': np.array(data, dtype=[('freq', 'i4'), ('magnitude', 'f4'),
                                               ('phase_deg', 'f4'), ('phase_rad', 'f4')])}
             hex_dictionary['I0'] = hex_colors[0]
             hex_colors.remove(hex_dictionary['I0'])
 
-    check_frequency_array(intf_data, min_dataset_length)
+    intf_data = reduce_frequency_array(intf_data)
 
     all_data = main_data.copy()
     all_data.update(intf_data)
@@ -209,12 +210,12 @@ def main():
     array_diff = unwrap_phase(array_diff)
 
     if time_file_str != 'None':
-        array_diff.tofile(plot_location + time_file_str, sep="\n")
+        array_diff.tofile(plot_location + path_type + time_file_str, sep="\n")
     if time_file_loc != 'None':
         for ant, array in all_data.items():
-            array.tofile(plot_location + time_file_loc + ant + '.txt', sep="\n")
-        combined_main_array.tofile(plot_location + time_file_loc + 'main_array_combined.txt', sep="\n")
-        combined_intf_array.tofile(plot_location + time_file_loc + 'intf_array_combined.txt', sep="\n")
+            array.tofile(plot_location + time_file_loc + path_type + ant + '.txt', sep="\n")
+        combined_main_array.tofile(plot_location + time_file_loc + path_type + 'main_array_combined.txt', sep="\n")
+        combined_intf_array.tofile(plot_location + time_file_loc + path_type + 'intf_array_combined.txt', sep="\n")
     # PLOTTING
 
     numplots = 6
@@ -236,7 +237,7 @@ def main():
 
     for plot in range(0, numplots):
         smpplot[plot].grid()
-    print "plotting"
+    print("plotting")
     smpplot[2].plot(array_diff['freq'], array_diff['phase_deg'])
     smpplot[2].set_ylabel('Transmitter Path\nDifference Between\nArrays [degrees]')
 
@@ -269,16 +270,16 @@ def main():
         missing_data_statement = "***MISSING DATA FROM ANTENNA(S) "
         for element in missing_data:
             missing_data_statement = missing_data_statement + element + " "
-        print missing_data_statement
+        print(missing_data_statement)
         plt.figtext(0.65, 0.05, missing_data_statement, fontsize=15)
 
     if estimate_data:  # not empty
         estimate_data_statement = "***ESTIMATED INTF DATA BECAUSE MISSING MEASUREMENT"
-        print estimate_data_statement
+        print(estimate_data_statement)
         plt.figtext(0.55, 0.05, estimate_data_statement, fontsize=15)
 
     if data_description:
-        print data_description
+        print(data_description)
         plt.figtext(0.65, 0.10, data_description, fontsize=15)
 
     fig.savefig(plot_location + plot_filename)
