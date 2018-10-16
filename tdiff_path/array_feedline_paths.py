@@ -133,14 +133,14 @@ def main():
     # Get the cable model depending on the site being analyzed.
     if 'Saskatoon' in radar_name or 'sas' in radar_name or 'SAS' in radar_name:
         cable_type = 'Belden8237'  # known
-        cable_length = 600.0  # ft
+        cable_length = 600.0  # ft ??
     elif 'Prince George' in radar_name or 'Prince_George' in radar_name or 'pgr' in radar_name or \
             'PGR' in radar_name:
-        cable_type = 'Belden8237'  # TODO correct these two values
-        cable_length = 600.0  # ft
+        cable_type = 'Belden8237'  # known checked 2015 photos  - although I3 will be LMR400
+        cable_length = 600.0  # ft ??
     elif 'Inuvik' in radar_name or 'inv' in radar_name or 'INV' in radar_name:
         cable_type = 'Belden8237'  # TODO correct these two values
-        cable_length = 600.0  # ft
+        cable_length = 600.0  # ft ??
     elif 'Rankin Inlet' in radar_name or 'Rankin_Inlet' in radar_name or 'rkn' in radar_name or \
             'RKN' in radar_name or 'Rankin-Inlet' in radar_name:
         cable_type = 'C1180'  # known checked 2018

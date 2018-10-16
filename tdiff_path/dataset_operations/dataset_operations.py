@@ -489,7 +489,6 @@ def create_linear_fit_dictionary(array):
     (the numpy array of the line of best fit data).
 
     """
-
     data_array = unwrap_phase(array)
 
     # In this fit, slope represents the change in phase over frequency. This can be
