@@ -139,7 +139,7 @@ def main():
         cable_type = 'Belden8237'  # known checked 2015 photos  - although I3 will be LMR400
         cable_length = 600.0  # ft ??
     elif 'Inuvik' in radar_name or 'inv' in radar_name or 'INV' in radar_name:
-        cable_type = 'Belden8237'  # TODO correct these two values
+        cable_type = 'EC400'  # checked 2017 photos.
         cable_length = 600.0  # ft ??
     elif 'Rankin Inlet' in radar_name or 'Rankin_Inlet' in radar_name or 'rkn' in radar_name or \
             'RKN' in radar_name or 'Rankin-Inlet' in radar_name:

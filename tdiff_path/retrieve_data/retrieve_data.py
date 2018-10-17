@@ -288,7 +288,7 @@ def create_carol_c1180_cable_loss_array(ref_freq_list, cable_length):
     # 50 MHz: 0.9 dB/100ft
     # log(y) = slope * log(x) + intercept
 
-    adjustment_factor = 0.01
+    adjustment_factor = 0.00
     ref_1_mhz = 0.13 - adjustment_factor
     ref_10_mhz = 0.4 - adjustment_factor
     ref_50_mhz = 0.9 - adjustment_factor
@@ -311,3 +311,39 @@ def create_carol_c1180_cable_loss_array(ref_freq_list, cable_length):
     return cable_loss_array
 
 
+def create_eupen_ec400_cable_loss_array(ref_freq_list, cable_length):
+    """
+    Take a list of reference frequencies and cable length and return a numpy array with
+    dtypes 'freq' and 'loss' for Eupen EC 400 low-loss 50 ohm coaxial cable.
+    :param ref_freq_list:  list of frequencies to generate a numpy array for, given in Hz.
+    :param cable_length: given in ft.
+    :return: cable_loss_array, an array with dtypes freq (in Hz) and loss (in dB)
+    """
+
+    # do a log-log fit with given values from datasheet:
+    # 10 MHz: 1.3 dB/100m = 0.39624 dB/100ft
+    # 20 MHz: 1.8 dB/100m = 0.54864 dB/100ft
+    # 30 MHz: 2.2 dB/100m = 0.67056 dB/100ft
+    # log(y) = slope * log(x) + intercept
+
+    adjustment_factor = 0.00
+    ref_10_mhz = 0.39624 - adjustment_factor
+    ref_20_mhz = 0.54864 - adjustment_factor
+    ref_30_mhz = 0.67056 - adjustment_factor
+
+    slope_1 = math.log(ref_20_mhz/ref_10_mhz, 10.0) / math.log(20.0/10.0, 10.0)
+    slope_2 = math.log(ref_30_mhz/ref_20_mhz, 10.0) / math.log(30.0/20.0, 10.0)
+    intercept = math.log(ref_10_mhz, 10.0) - slope_1 * math.log(10.0, 10.0)
+
+    print('Slopes: {slope_1}, {slope_2}'.format(slope_1=slope_1, slope_2=slope_2))
+    cable_loss = [cable_length/100.0 * (10.0 ** (slope_1 * math.log(freq * 1.0e-6, 10.0) +
+                  intercept)) for freq in ref_freq_list if freq <= 10000000]
+    cable_loss_2 = [cable_length/100.0*(10.0**(slope_2 * math.log(freq * 1.0e-6, 10.0) +
+                    intercept)) for freq in ref_freq_list if freq > 10000000]
+    cable_loss.extend(cable_loss_2)
+
+    cable_loss_array = []
+    for freq, loss in zip(ref_freq_list, cable_loss):
+        cable_loss_array.append((freq, loss))
+    cable_loss_array = np.array(cable_loss_array, dtype=[('freq', 'i4'), ('loss', 'f4')])
+    return cable_loss_array
