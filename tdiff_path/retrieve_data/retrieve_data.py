@@ -190,7 +190,7 @@ def create_belden_8214_cable_loss_array(ref_freq_list, cable_length):
     slope_2 = math.log(1.2/0.5, 10.0) / math.log(50.0/10.0, 10.0)
     intercept = math.log(0.1, 10.0) - slope_1 * math.log(1.0, 10.0)
 
-    print('Slopes: {slope_1}, {slope_2}'.format(slope_1=slope_1, slope_2=slope_2))
+    #print('Slopes: {slope_1}, {slope_2}'.format(slope_1=slope_1, slope_2=slope_2))
 
     cable_loss = [cable_length/100.0 * 10.0 ** (slope_1 * math.log(freq * 1.0e-6, 10.0) +
                   intercept) for freq in ref_freq_list if freq <= 10000000]
@@ -223,7 +223,7 @@ def create_belden_9913_cable_loss_array(ref_freq_list, cable_length):
     slope_2 = math.log(3.281/1.641, 10.0) / math.log(50.0/10.0, 10.0)
     intercept = math.log(1.312, 10.0) - slope_1 * math.log(5.0, 10.0)
 
-    print('Slopes: {slope_1}, {slope_2}'.format(slope_1=slope_1, slope_2=slope_2))
+    #print('Slopes: {slope_1}, {slope_2}'.format(slope_1=slope_1, slope_2=slope_2))
 
     cable_length = cable_length/3.2808  # convert to metres because these attenuation
     # values are in metres.
@@ -259,7 +259,7 @@ def create_belden_8237_cable_loss_array(ref_freq_list, cable_length):
     slope_2 = math.log(1.3/0.6, 10.0) / math.log(50.0/10.0, 10.0)
     intercept = math.log(0.2, 10.0) - slope_1 * math.log(1.0, 10.0)
 
-    print('Slopes: {slope_1}, {slope_2}'.format(slope_1=slope_1, slope_2=slope_2))
+    #print('Slopes: {slope_1}, {slope_2}'.format(slope_1=slope_1, slope_2=slope_2))
     cable_loss = [cable_length/100.0 * (10.0**(slope_1 * math.log(freq * 1.0e-6, 10.0) +
                   intercept)) for freq in ref_freq_list if freq <= 10000000]
     cable_loss_2 = [cable_length/100.0*(10.0**(slope_2 * math.log(freq * 1.0e-6, 10.0) +
@@ -297,7 +297,7 @@ def create_carol_c1180_cable_loss_array(ref_freq_list, cable_length):
     slope_2 = math.log(ref_50_mhz/ref_10_mhz, 10.0) / math.log(50.0/10.0, 10.0)
     intercept = math.log(ref_1_mhz, 10.0) - slope_1 * math.log(1.0, 10.0)
 
-    print('Slopes: {slope_1}, {slope_2}'.format(slope_1=slope_1, slope_2=slope_2))
+    #print('Slopes: {slope_1}, {slope_2}'.format(slope_1=slope_1, slope_2=slope_2))
     cable_loss = [cable_length/100.0 * (10.0 ** (slope_1 * math.log(freq * 1.0e-6, 10.0) +
                   intercept)) for freq in ref_freq_list if freq <= 10000000]
     cable_loss_2 = [cable_length/100.0*(10.0**(slope_2 * math.log(freq * 1.0e-6, 10.0) +
@@ -335,7 +335,7 @@ def create_eupen_ec400_cable_loss_array(ref_freq_list, cable_length):
     slope_2 = math.log(ref_30_mhz/ref_20_mhz, 10.0) / math.log(30.0/20.0, 10.0)
     intercept = math.log(ref_10_mhz, 10.0) - slope_1 * math.log(10.0, 10.0)
 
-    print('Slopes: {slope_1}, {slope_2}'.format(slope_1=slope_1, slope_2=slope_2))
+    #print('Slopes: {slope_1}, {slope_2}'.format(slope_1=slope_1, slope_2=slope_2))
     cable_loss = [cable_length/100.0 * (10.0 ** (slope_1 * math.log(freq * 1.0e-6, 10.0) +
                   intercept)) for freq in ref_freq_list if freq <= 10000000]
     cable_loss_2 = [cable_length/100.0*(10.0**(slope_2 * math.log(freq * 1.0e-6, 10.0) +
