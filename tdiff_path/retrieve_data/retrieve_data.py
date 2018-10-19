@@ -146,6 +146,9 @@ def get_cable_loss_array(ref_freq_list, cable_length, cable_type):
     elif cable_type == 'C1180':
         cable_loss_dataset = create_carol_c1180_cable_loss_array(ref_freq_list,
                                                                  cable_length)
+    elif cable_type == 'EC400':
+        cable_loss_dataset = create_eupen_ec400_cable_loss_array(ref_freq_list,
+                                                                 cable_length)
     else:
         raise Exception('No cable model set up for that cable type.')
 
@@ -288,7 +291,7 @@ def create_carol_c1180_cable_loss_array(ref_freq_list, cable_length):
     # 50 MHz: 0.9 dB/100ft
     # log(y) = slope * log(x) + intercept
 
-    adjustment_factor = 0.00
+    adjustment_factor = 0.02
     ref_1_mhz = 0.13 - adjustment_factor
     ref_10_mhz = 0.4 - adjustment_factor
     ref_50_mhz = 0.9 - adjustment_factor
