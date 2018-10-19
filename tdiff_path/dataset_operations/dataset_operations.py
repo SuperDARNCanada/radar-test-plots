@@ -180,18 +180,23 @@ def reduce_frequency_array(dict_of_dataframes_with_freq_column, freqs=None):
 
     for ant, length in long_datasets.items():
         lines_to_delete = []
-        if length % min_dataset_length == 0:
+        if (length - 1) % (min_dataset_length - 1) == 0:
             integer = length/min_dataset_length
             for value, entry in dict_of_dataframes_with_freq_column[ant].iterrows():
-                if (value-1) % integer != 0:
+                #print(value, entry)
+                if value == 0 and entry['freq'] == reference_frequency[0]:
+                    continue
+                elif value % integer != 0:
                     lines_to_delete.append(value)
-                elif entry['freq'] != reference_frequency[(value-1)/integer]:
-                    sys.exit('Datasets are in multiple lengths but frequency axis '
+                elif entry['freq'] != reference_frequency[value/integer]:
+                    print(entry['freq'], reference_frequency[value/integer])
+                    raise Exception('Datasets are in multiple lengths but frequency axis '
                               'values are not the same when divided, length {} broken down to length '
                               '{}'.format(length, min_dataset_length))
-            dict_of_dataframes_with_freq_column[ant] = np.delete(dict_of_dataframes_with_freq_column[ant], lines_to_delete, axis=0)
+            dict_of_dataframes_with_freq_column[ant].drop(dict_of_dataframes_with_freq_column[ant
+                                                          ].index[lines_to_delete], inplace=True)
         else:
-            sys.exit('Please ensure datasets are the same length and frequency axes '
+            raise Exception('Please ensure datasets are the same length and frequency axes '
                      'are the same, length {} is greater than minimum dataset length '
                      '{}'.format(length, min_dataset_length))
 
@@ -345,7 +350,7 @@ def combine_arrays(list_of_dataframes):
     return combined_data
 
 
-def vswr_to_single_receive_direction(data, cable_loss_array):
+def vswr_to_single_receive_direction(channel_name, data, cable_loss_array):
     """
     Take in a numpy array with vswr dtype and return a numpy array with both vswr and
     magnitude dtype. This magnitude is a single direction magnitude, indicating the dB
@@ -355,13 +360,12 @@ def vswr_to_single_receive_direction(data, cable_loss_array):
     Also convert the phase from a reflected phase value to a single direction
     transmission value, using the reflection_to_transmission_phase function.
 
-    :param: data: numpy array with freq and vswr dtype, and one or more of the phase
-     dtypes ('phase', 'phase_deg', or 'phase_rad')
+    :param channel_name: The name of the channel that this data is for.
+    :param: data: dataframe with column for vswr
     :param: cable_loss: array of cable loss for the same frequencies as in data.
     :return: new_data: numpy array with vswr dtype and magnitude dtype, where magnitude
      is the S12 magnitude, and where the phase is the S12 phase (single direction).
     """
-    new_data = []
 
     # Check if both data and cable have the same values for frequency.
     if not np.array_equal(data['freq'], cable_loss_array['freq']):
@@ -370,12 +374,13 @@ def vswr_to_single_receive_direction(data, cable_loss_array):
     #dtypes = [(x, str(y[0])) for x, y in sorted(data.dtype.fields.items(), key=lambda
     #    k: k[1])] # get list of dtypes sorted by column
 
+    cannot_convert = False
     for num, entry in data.iterrows():
         try:
             VSWR = entry['vswr']
             cable_loss = cable_loss_array['loss'][num]
         except:
-            raise Exception('No vswr dtype in this array.')
+            raise Exception('No vswr column in this dataframe.')
 
         return_loss_dB = 20 * math.log(((VSWR + 1) / (VSWR - 1)), 10)
 
@@ -389,11 +394,8 @@ def vswr_to_single_receive_direction(data, cable_loss_array):
 
         watts_transmitted_at_balun = watts_incident_at_balun - watts_reflected_at_balun
         if watts_transmitted_at_balun <= 0:
-            print("WRONG - we have no power at the balun")
-            print("This would suggest your cable loss model is too lossy.")
-            print("Cable loss = {loss} db at {freq}".format(loss=cable_loss,freq=entry[
-                'freq']))
-            # TODO error?
+            cannot_convert = True
+            break
 
         reflection_db_at_balun = 10 * math.log((watts_reflected_at_balun /
                                                 watts_incident_at_balun), 10)
@@ -406,7 +408,23 @@ def vswr_to_single_receive_direction(data, cable_loss_array):
         # Incoming power from antenna will have mismatch point and then cable losses.
         receive_power = transmission_db_at_balun - cable_loss
         receive_power = round(receive_power, 5)
-        data['magnitude'] = receive_power
+        data.loc[num,'magnitude'] = receive_power
+
+    if cannot_convert:
+        print("Channel {} VSWR is not being converted to a single direction.".format(channel_name))
+        print("    There is no power incident at the balun at some frequencies, which would "
+              "suggest your cable loss model is too lossy.")
+        print("    Going to convert the VSWR to a return loss in dB only.")
+        for num, entry in data.iterrows():
+            try:
+                VSWR = entry['vswr']
+                cable_loss = cable_loss_array['loss'][num]
+            except:
+                raise Exception('No vswr column in this dataframe.')
+
+            return_loss_dB = 20 * math.log(((VSWR + 1) / (VSWR - 1)), 10)
+
+            data.loc[num, 'magnitude'] = return_loss_dB
 
     # We now have single direction magnitude, but also need single direction phase.
     # Wrapping then unwrapping ensures there is no 360 degree offset from one dataset
