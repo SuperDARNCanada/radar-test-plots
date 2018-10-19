@@ -18,28 +18,37 @@ import retrieve_data.retrieve_data as retrieve
 # I have metadata for all the datasets I have available stored in a csv.
 site_file_metadata=pd.read_csv('site_file_metadata.csv')
 
+hex_colors = ['#ff1a1a', '#993300', '#ffff1a', '#666600', '#ff531a', '#cc9900', '#99cc00',
+              '#7a7a52', '#004d00', '#33ff33', '#26734d', '#003366', '#33cccc', '#00004d',
+              '#5500ff', '#a366ff', '#ff00ff', '#e6005c', '#ffaa80', '#999999']
+colour_dictionary = {'other': '#000000'}
 
 # subsetting for data from specific site, date, and data type.
 
 #working_site = 'PGR'
 #working_date = 20170930
 #working_data_type = 'feedline-VSWR'
-working_site = sys.argv[1]
-working_date = int(sys.argv[2])
-working_data_type = sys.argv[3]
-data_type_metadata = site_file_metadata[site_file_metadata['data_type']==working_data_type]
-site_to_data = {}
+working_metadata_index = int(sys.argv[1])
 
-for site in data_type_metadata.site.unique():
-    site_to_data[site] = data_type_metadata[data_type_metadata['site']==site]
 
-# choose a site and a date for the metadata we want to use.
+# data_type_metadata = site_file_metadata[site_file_metadata['data_type']==working_data_type]
+# site_to_data = {}
+#
+# for site in data_type_metadata.site.unique():
+#     site_to_data[site] = data_type_metadata[data_type_metadata['site']==site]
+#
+# # choose a site and a date for the metadata we want to use.
+#
+# working_metadata = site_to_data[working_site].loc[site_to_data[working_site]['date'] ==
+#                                                   working_date, :]
 
-working_metadata = site_to_data[working_site].loc[site_to_data[working_site]['date'] ==
-                                                  working_date, :]
-
-filename = str(working_metadata.iloc[0]['mapping_filename'])
-data_loc = str(working_metadata.iloc[0]['data_location'])
+filename = str(site_file_metadata.iloc[working_metadata_index]['mapping_filename'])
+data_loc = str(site_file_metadata.iloc[working_metadata_index]['data_location'])
+working_site = str(site_file_metadata.iloc[working_metadata_index]['site'])
+working_date = int(site_file_metadata.iloc[working_metadata_index]['date'])
+working_data_type = str(site_file_metadata.iloc[working_metadata_index]['data_type'])
+interim_data_bool = bool(site_file_metadata.iloc[working_metadata_index]['interim_data'])
+print(site_file_metadata.iloc[working_metadata_index])
 with open(filename, 'r') as f:
     mapping_dict = json.load(f)
 working_channel_data = {}
@@ -54,6 +63,7 @@ else:
 
 data_description = ''
 missing_data = []
+attenuator_flag = False
 for channel_name, channel_file in mapping_dict.items():
     if channel_name == '_comment':
         data_description = channel_file
@@ -61,13 +71,23 @@ for channel_name, channel_file in mapping_dict.items():
     if channel_file == 'dne':
         missing_data.append(channel_name)
         continue
+    if channel_name == 'atten':  # used for phasing matrix value of attenuators
+        attenuator_flag = True
+        attenuation = float(channel_file)
+        continue
+    if channel_name == 'atten_file':  # used for phasing matrix transmission through attenuators
+        attenuator_flag = True
+        continue
+    if channel_file == 'estimate_intf':
+        print('\nEstimation required for interferometer channel {}'.format(channel_name))
+        continue  # TODO create an estimate for this data.
     #print(channel_file)
     # find the header.
     with open(data_loc + channel_file, 'r') as csvfile:
         for line_num, line in enumerate(csvfile):
-            #print(line)
             if fnmatch.fnmatch(line, 'Freq. [Hz*'):  # skip to header
                 header_line = line_num - 1
+                #print(line)
                 #print('header is {}'.format(header_line))
                 break
     working_channel_data[channel_name] = pd.read_csv(data_loc + channel_file, header=header_line)
@@ -84,9 +104,9 @@ for channel_name, channel_file in mapping_dict.items():
         rename_dict, axis='columns')
 
 if missing_data:
-    print('There is missing data from the following channel(s): {}\n'.format(missing_data))
+    print('\nThere is missing data from the following channel(s): {}'.format(missing_data))
 if data_description != '':
-    print('There is a data description associated with this data:\n')
+    print('\nThere is a data description associated with this data:')
     print(data_description)
 
 # ensure all dataframes have the same frequency array.
@@ -114,19 +134,36 @@ if working_data_type == 'feedline-VSWR':
         dict_key = row['array'] + str(row['feedline_number'])
         cable_loss_dataset_dict[dict_key] = retrieve.get_cable_loss_array(reference_frequency, row['cable_length_ft'], row['cable_type'])
 
-# print('We have loaded a cable loss model for the cable type at {}.\n'.format(working_site))
-# print('\n')
+if working_data_type == 'pm-path':
+    if attenuator_flag:
+        if 'atten_file' in channels:
+            channels.pop('atten_file')
+            for channel in channels:
+                working_channel_data[channel].loc[:, channel + 'phase_deg'] = np.array(
+                    working_channel_data[channel].loc[:, channel + 'phase_deg']) - np.array(
+                    working_channel_data['atten_file'].loc[:, 'atten_filephase_deg'])
+                working_channel_data[channel].loc[:, channel + 'magnitude'] = np.array(
+                    working_channel_data[channel].loc[:, channel + 'magnitude']) - np.array(
+                    working_channel_data['atten_file'].loc[:, 'atten_filemagnitude'])
+            del working_channel_data['atten_file']
+        else:  # float attenuation
+            for channel in channels:
+                working_channel_data[channel].loc[:, channel + 'magnitude'] = np.array(
+                    working_channel_data[channel].loc[:, channel + 'magnitude']) - attenuation
+                # phase will not change, but phase difference between channels should still
+                # be accurate because all channels had the same attenuation.
 
 for channel in channels:
     # get estimated magnitude (dB loss) of single direction signal incident on the
     # balun when it reaches the end of the feedline.
     # get slice of the dataframe dealing with this data.
+    colour_dictionary[channel] = hex_colors.pop(0)
     if working_data_type == 'feedline-VSWR':
         dataset = working_dataframe.loc[:,
                   ['freq', channel + 'vswr', channel + 'phase_deg']].rename(
             {channel + 'vswr': 'vswr', channel + 'phase_deg': 'phase_deg'}, axis='columns')
         dataset_with_transmission_data = do.vswr_to_single_receive_direction(
-            dataset, cable_loss_dataset_dict[channel])
+            channel, dataset, cable_loss_dataset_dict[channel])
         # Wrapping the new data with new phase for single direction.
         phase_wrapped_data = do.wrap_phase(dataset_with_transmission_data)
         working_dataframe.loc[:, channel + 'vswr'] = phase_wrapped_data['vswr']
@@ -159,38 +196,51 @@ for channel in channels:
 main_channels = []
 intf_channels = []
 for channel in channels:
-    if channel[0] == 'M':  # main
+    if channel[0] == 'M' and 'combined' not in channel:  # main
         main_channels.append(channel)
-    elif channel[0] == 'I':  # interferometer
+    elif channel[0] == 'I' and 'combined' not in channel:  # interferometer
         intf_channels.append(channel)
 
-# Combine_arrays returns unwrapped dataset.
-main_data = []
-intf_data = []
-for channel in main_channels:
-    main_data.append(working_dataframe.loc[:,['freq', channel+'phase_rad', channel+'magnitude']].rename({channel+'phase_rad': 'phase_rad', channel+'magnitude':'magnitude'}, axis='columns'))
-unwrapped_main_data = do.combine_arrays(main_data)
-for channel in intf_channels:
-    intf_data.append(working_dataframe.loc[:,['freq', channel+'phase_rad', channel+'magnitude']].rename({channel+'phase_rad': 'phase_rad', channel+'magnitude':'magnitude'}, axis='columns'))
-unwrapped_intf_data = do.combine_arrays(intf_data)
+if main_channels:  # not empty
+    # Combine_arrays returns unwrapped dataset.
+    main_data = []
 
-working_dataframe.loc[:,'M_all_phase_deg_unwrap'] = np.array(unwrapped_main_data.loc[:,['phase_rad']]) * 180.0 / math.pi
-working_dataframe.loc[:,'M_all_phase_rad'] = unwrapped_main_data.loc[:,'phase_rad']
-working_dataframe.loc[:,'I_all_phase_deg_unwrap'] = np.array(unwrapped_intf_data.loc[:,['phase_rad']]) * 180.0 / math.pi
-working_dataframe.loc[:,'I_all_phase_rad'] = unwrapped_intf_data.loc[:,'phase_rad']
-
-# Wrapping after unwrapping ensures the first values in array are within -pi to pi.
-combined_main_array = do.wrap_phase(unwrapped_main_data)
-combined_intf_array = do.wrap_phase(unwrapped_intf_data)
-working_dataframe.loc[:,'M_all_phase_deg'] = np.array(combined_main_array.loc[:,['phase_rad']]) * 180.0 / math.pi
-working_dataframe.loc[:,'M_all_magnitude'] = combined_main_array.loc[:,'magnitude']
-working_dataframe.loc[:,'I_all_phase_deg'] = np.array(combined_intf_array.loc[:,['phase_rad']]) * 180.0 / math.pi
-working_dataframe.loc[:,'I_all_magnitude'] = combined_intf_array.loc[:,'magnitude']
-
-linear_fit_dict['M_all_'] = do.create_linear_fit_dictionary(unwrapped_main_data)
-linear_fit_dict['I_all_'] = do.create_linear_fit_dictionary(unwrapped_intf_data)
+    for channel in main_channels:
+        main_data.append(working_dataframe.loc[:,['freq', channel+'phase_rad', channel+'magnitude']].rename({channel+'phase_rad': 'phase_rad', channel+'magnitude':'magnitude'}, axis='columns'))
+    unwrapped_main_data = do.combine_arrays(main_data)
 
 
+    working_dataframe.loc[:,'M_all_phase_deg_unwrap'] = np.array(unwrapped_main_data.loc[:,['phase_rad']]) * 180.0 / math.pi
+    working_dataframe.loc[:,'M_all_phase_rad'] = unwrapped_main_data.loc[:,'phase_rad']
+
+
+    # Wrapping after unwrapping ensures the first values in array are within -pi to pi.
+    combined_main_array = do.wrap_phase(unwrapped_main_data)
+
+    working_dataframe.loc[:,'M_all_phase_deg'] = np.array(combined_main_array.loc[:,['phase_rad']]) * 180.0 / math.pi
+    working_dataframe.loc[:,'M_all_magnitude'] = combined_main_array.loc[:,'magnitude']
+
+    linear_fit_dict['M_all_'] = do.create_linear_fit_dictionary(unwrapped_main_data)
+else:
+    print('\nNo combined main array data was calculated because there is no individual channel '
+          'data.')
+if intf_channels:  # not empty
+    intf_data = []
+    for channel in intf_channels:
+        intf_data.append(working_dataframe.loc[:,['freq', channel+'phase_rad', channel+'magnitude']].rename({channel+'phase_rad': 'phase_rad', channel+'magnitude':'magnitude'}, axis='columns'))
+    unwrapped_intf_data = do.combine_arrays(intf_data)
+    working_dataframe.loc[:,'I_all_phase_deg_unwrap'] = np.array(unwrapped_intf_data.loc[:,['phase_rad']]) * 180.0 / math.pi
+    working_dataframe.loc[:,'I_all_phase_rad'] = unwrapped_intf_data.loc[:,'phase_rad']
+    combined_intf_array = do.wrap_phase(unwrapped_intf_data)
+    working_dataframe.loc[:, 'I_all_phase_deg'] = np.array(
+        combined_intf_array.loc[:, ['phase_rad']]) * 180.0 / math.pi
+    working_dataframe.loc[:, 'I_all_magnitude'] = combined_intf_array.loc[:, 'magnitude']
+    linear_fit_dict['I_all_'] = do.create_linear_fit_dictionary(unwrapped_intf_data)
+else:
+    print('\nNo combined interferometer array data was calculated because there is no individual '
+          'channel data.')
+
+print('\nThe data has been successfully loaded.')
 # print('I have calculated combined datasets for the entire array from the individual channels in '
 #       'that array.\n')
 #
