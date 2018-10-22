@@ -20,7 +20,8 @@ site_file_metadata=pd.read_csv('site_file_metadata.csv')
 
 hex_colors = ['#ff1a1a', '#993300', '#ffff1a', '#666600', '#ff531a', '#cc9900', '#99cc00',
               '#7a7a52', '#004d00', '#33ff33', '#26734d', '#003366', '#33cccc', '#00004d',
-              '#5500ff', '#a366ff', '#ff00ff', '#e6005c', '#ffaa80', '#999999']
+              '#5500ff', '#a366ff', '#ff00ff', '#e6005c', '#ffaa80', '#999999', '#994455',
+              '#44ee23']
 colour_dictionary = {'other': '#000000'}
 
 # subsetting for data from specific site, date, and data type.
@@ -49,6 +50,8 @@ working_date = int(site_file_metadata.iloc[working_metadata_index]['date'])
 working_data_type = str(site_file_metadata.iloc[working_metadata_index]['data_type'])
 interim_data_bool = bool(site_file_metadata.iloc[working_metadata_index]['interim_data'])
 print(site_file_metadata.iloc[working_metadata_index])
+plot_title = working_site + ' ' + str(working_date) + ' ' + working_data_type
+
 with open(filename, 'r') as f:
     mapping_dict = json.load(f)
 working_channel_data = {}
@@ -239,6 +242,90 @@ if intf_channels:  # not empty
 else:
     print('\nNo combined interferometer array data was calculated because there is no individual '
           'channel data.')
+
+
+##################################################################
+# Get the array differences.
+
+
+if 'M_all_phase_deg_unwrap' and 'I_all_phase_deg_unwrap' in working_dataframe.columns:
+    # calculate array difference
+    # Computing the phase difference between the arrays and
+    # also getting tdiff across the frequency range.
+    array_diff = []
+    for m, i in zip(working_dataframe.loc[:, 'M_all_phase_deg_unwrap'],
+                    working_dataframe.loc[:, 'I_all_phase_deg_unwrap']):
+        phase_diff = m - i
+        array_diff.append(phase_diff)
+    array_diff = do.wrap_phase(pd.DataFrame(np.array(array_diff), columns=['phase_deg']))
+    if 'array_diff_phase_deg' not in working_dataframe.columns:
+        working_dataframe = pd.concat([working_dataframe,
+                                       array_diff.rename({'phase_deg': 'array_diff_phase_deg'},
+                                                         axis='columns')], axis='columns')
+    else:
+        working_dataframe['array_diff_phase_deg'] = array_diff
+
+    # Now insert the tdiff in ns after the phase has been wrapped.
+    # This is the time difference between the signal incident on the main array
+    # antennas reaching the end of the feedlines and the interferometer array signal
+    # reaching the end of the feedlines. This is a portion of the entire path from
+    # antennas to receiver. The entire path's time difference is a calibrated value
+    # used in SuperDARN data analysis, and is assumed to be constant across the
+    # frequency spectrum, as would be expected if the path was completely linear (such
+    # as a cable).
+    time_ns_list = []
+    for num, dp in array_diff.iterrows():
+        freq = working_dataframe['freq'][num]
+        phase = dp
+        time_ns = phase * 1e9 / (freq * 360.0)
+        time_ns_list.append(time_ns)
+    if 'array_diff_time_ns' not in working_dataframe.columns:
+        working_dataframe = pd.concat([working_dataframe, pd.DataFrame(np.array(time_ns_list),
+                                                                       columns=[
+                                                                           'array_diff_time_ns'])],
+                                      axis='columns')
+    else:
+        working_dataframe['array_diff_time_ns'] = pd.DataFrame(np.array(time_ns_list),
+                                                               columns=['array_diff_time_ns'])
+
+if 'M_combinedphase_deg_unwrap' and 'I_combinedphase_deg_unwrap' in working_dataframe.columns:
+    # calculate array difference
+    # Computing the phase difference between the arrays and
+    # also getting tdiff across the frequency range.
+    array_diff = []
+    for m, i in zip(working_dataframe.loc[:, 'M_combinedphase_deg_unwrap'],
+                    working_dataframe.loc[:, 'I_combinedphase_deg_unwrap']):
+        phase_diff = m - i
+        array_diff.append(phase_diff)
+    array_diff = do.wrap_phase(pd.DataFrame(np.array(array_diff), columns=['phase_deg']))
+    if 'array_diff_phase_deg' not in working_dataframe.columns:
+        working_dataframe = pd.concat([working_dataframe, array_diff.rename(
+            {'phase_deg': 'tested_array_diff_phase_deg'}, axis='columns')], axis='columns')
+    else:
+        working_dataframe['tested_array_diff_phase_deg'] = array_diff
+
+    # Now insert the tdiff in ns after the phase has been wrapped.
+    # This is the time difference between the signal incident on the main array
+    # antennas reaching the end of the feedlines and the interferometer array signal
+    # reaching the end of the feedlines. This is a portion of the entire path from
+    # antennas to receiver. The entire path's time difference is a calibrated value
+    # used in SuperDARN data analysis, and is assumed to be constant across the
+    # frequency spectrum, as would be expected if the path was completely linear (such
+    # as a cable).
+    time_ns_list = []
+    for num, dp in array_diff.iterrows():
+        freq = working_dataframe['freq'][num]
+        phase = dp
+        time_ns = phase * 1e9 / (freq * 360.0)
+        time_ns_list.append(time_ns)
+    if 'array_diff_time_ns' not in working_dataframe.columns:
+        working_dataframe = pd.concat([working_dataframe, pd.DataFrame(np.array(time_ns_list),
+                                                                       columns=[
+                                                                           'tested_array_diff_time_ns'])],
+                                      axis='columns')
+    else:
+        working_dataframe['array_diff_time_ns'] = pd.DataFrame(np.array(time_ns_list), columns=[
+            'tested_array_diff_time_ns'])
 
 print('\nThe data has been successfully loaded.')
 # print('I have calculated combined datasets for the entire array from the individual channels in '
