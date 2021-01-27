@@ -5,9 +5,6 @@
 # differences between the antennas.
 
 import sys
-import time
-import math
-import random
 import fnmatch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -25,7 +22,7 @@ vswr_files_str = sys.argv[4]  # eg. 'vswr-files.json' - must be located in plot_
 #vswr_intf_files_str = sys.argv[5]  # eg. 'vswr-intf-files.json' - must be location in plot_location.
 plot_filename = radar_name + ' vswrs.png'
 
-print radar_name, data_location, plot_location, vswr_files_str, plot_filename
+print(radar_name, data_location, plot_location, vswr_files_str, plot_filename)
 
 # number_of_data_points = 801
 vswrs_plot_title = radar_name + ' Feedline to Antenna Standing Wave Ratios'
@@ -51,7 +48,7 @@ def main():
     missing_data = []
     all_data = {}
     min_dataset_length = 100000  # won't be this high
-    for ant, v in all_files.iteritems():
+    for ant, v in all_files.items():
         if ant == '_comment':
             data_description = v
             continue
@@ -76,13 +73,13 @@ def main():
                 vswr_column = vswr_columns[0]
                 phase_header = 'Phase*'
                 phase_columns = [i for i in range(len(row)) if
-                                fnmatch.fnmatch(row[i], phase_header)]
+                                 fnmatch.fnmatch(row[i], phase_header)]
                 phase_column = phase_columns[0]
                 if (abs(vswr_column - freq_column) > 2) or (
                             abs(phase_column - freq_column) > 2):
-                    print freq_column, vswr_column, phase_column
+                    print(freq_column, vswr_column, phase_column)
                     sys.exit('Data Phase and VSWR are given from different sweeps - please'
-                                 'check data file so first sweep has SWR and Phase info.')
+                             'check data file so first sweep has SWR and Phase info.')
             except:
                 sys.exit('Cannot find VSWR data.')
 
@@ -141,7 +138,6 @@ def main():
             offset_of_best_fit.append(entry['phase'] - best_fit_value)
         linear_fit_dict[ant]['offset_of_best_fit'] = offset_of_best_fit
 
-
     # find top antennas with highest phase offsets and plot those antennas SWR
     furthest_phase_offset = {}
     for ant, dataset in all_data.items():
@@ -188,16 +184,16 @@ def main():
     smpplot[4].set_ylabel('Phase Offsets from\nLine of Best Fit', size='xx-large')
     #plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
     #           ncol=2, mode="expand", borderaxespad=0.)
-    print "plotting"
+    print("plotting")
     if missing_data:  # not empty
         missing_data_statement = "***MISSING DATA FROM ANTENNA(S) "
         for element in missing_data:
             missing_data_statement = missing_data_statement + element + " "
-        print missing_data_statement
+        print(missing_data_statement)
         plt.figtext(0.65, 0.05, missing_data_statement, fontsize=15)
 
     if data_description:
-        print data_description
+        print(data_description)
         plt.figtext(0.65, 0.10, data_description, fontsize=15)
 
     fig.savefig(plot_location + plot_filename)
