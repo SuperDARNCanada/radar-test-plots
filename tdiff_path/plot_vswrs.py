@@ -34,6 +34,7 @@ with open(plot_location + vswr_files_str) as f:
     vswr_files = json.load(f)
 
     all_files = vswr_files
+    print("All files: {}".format(vswr_files))
 #
 #
 # A list of 21 colors that will be assigned to antennas to keep plot colors consistent.
@@ -57,10 +58,11 @@ def main():
             continue
         with open(data_location + v, 'r') as csvfile:
             for line in csvfile:
-                if fnmatch.fnmatch(line, 'Freq. [Hz*'):  # skip to header
+                # skip to header
+                if fnmatch.fnmatch(line, 'Freq [Hz*') or fnmatch.fnmatch(line, 'Frequency [Hz*'):
                     break
             else:  # no break
-                sys.exit('No Data in file {}'.format(v))
+                sys.exit('No data in file {}\n'.format(v))
             row = line.split(',')
             try:
                 freq_header = 'Freq*'
@@ -191,13 +193,16 @@ def main():
             missing_data_statement = missing_data_statement + element + " "
         print(missing_data_statement)
         plt.figtext(0.65, 0.05, missing_data_statement, fontsize=15)
+    else:
+        print("No missing data")
 
     if data_description:
-        print(data_description)
+        print("Data description: {}".format(data_description))
         plt.figtext(0.65, 0.10, data_description, fontsize=15)
 
     fig.savefig(plot_location + plot_filename)
     plt.close(fig)
+    print("Figure saved at: {}".format(plot_location + plot_filename))
 
 
 if __name__ == main():
