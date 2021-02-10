@@ -11,7 +11,7 @@ import json
 import csv
 
 from tdiff_path.dataset_operations.dataset_operations import wrap_phase_dictionary, \
-    correct_frequency_array
+    interp_frequency_array
 
 # General variables to change depending on data being used
 radar_name = sys.argv[1]  # eg. Inuvik
@@ -141,7 +141,7 @@ def main():
 
             after_data[ant] = data
 
-    correct_frequency_array(after_data)
+    after_data = interp_frequency_array(after_data)
 
     velocity_factor = 0.66
     cable_distance = 22.1

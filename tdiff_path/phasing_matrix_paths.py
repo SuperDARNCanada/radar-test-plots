@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 # phasing_matrix_paths.py
 # To find the phase paths through the phasing matrix.
@@ -14,7 +14,8 @@ from scipy import stats
 import json
 import csv
 
-from dataset_operations.dataset_operations import check_frequency_array, combine_arrays, unwrap_phase
+from dataset_operations.dataset_operations import reduce_frequency_array, \
+    combine_arrays, unwrap_phase
 
 # General variables to change depending on data being used
 radar_name = sys.argv[1]
@@ -23,12 +24,13 @@ plot_location = sys.argv[3]
 path_file_str = sys.argv[4]
 time_file_str = sys.argv[5]
 time_file_loc = 'numpy_channel_data/'
+path_type = 'pm-rcv'
 
 plot_filename = radar_name + ' PM-path.png'
 plot_filename_2 = radar_name + ' Individual-PM-paths.png'
 plot_title = radar_name + ' Phasing Matrix Paths'
 
-print radar_name, data_location, plot_location, path_file_str, plot_filename
+print(radar_name, data_location, plot_location, path_file_str, plot_filename)
 
 sys.path.append(data_location)
 
@@ -54,8 +56,7 @@ def main():
     estimate_data = []
     main_data = {}
     intf_data = {}
-    min_dataset_length = 100000  # just a big number
-    for k, v in path_files.iteritems():
+    for k, v in path_files.items():
         if k == '_comment':
             data_description = v
             continue
@@ -120,10 +121,6 @@ def main():
 
             data = unwrap_phase(data)
 
-            if len(data) < min_dataset_length:
-                min_dataset_length = len(data)
-                min_data_freqs = data['freq'] # reference frequency sequence.
-
             if k[0] == 'M':  # in main files.
                 if k == 'M_combined':
                     combined_array_test['main_combined'] = data
@@ -144,11 +141,12 @@ def main():
             else:
                 sys.exit('There is an invalid key {}'.format(k))
 
-    check_frequency_array(main_data, min_dataset_length, freqs=min_data_freqs)
-    check_frequency_array(atten_data, min_dataset_length, freqs=min_data_freqs)
-    check_frequency_array(combined_array_test, min_dataset_length, freqs=min_data_freqs)
+    main_data = reduce_frequency_array(main_data)
+    if combined_array_test:
+        combined_array_test = reduce_frequency_array(combined_array_test)
 
     if attenuator_flag:
+        atten_data = reduce_frequency_array(atten_data)
         if atten_data:
             for datadict in [main_data, intf_data, combined_array_test]:
                 for ant, dataset in datadict.items():
@@ -183,7 +181,7 @@ def main():
                                     'offset_of_best_fit': np.array(offset_of_best_fit),
                                     'time_delay_ns': round(main_slope / (2 * math.pi), 11) * -10 ** 9}
 
-        check_frequency_array(intf_data, min_dataset_length, min_data_freqs)
+        intf_data = reduce_frequency_array(intf_data)
 
         all_data = main_data.copy()
         all_data.update(intf_data)
@@ -276,7 +274,7 @@ def main():
 
         for plot in range(0, numplots):
             smpplot[plot].grid()
-        print "plotting"
+        print("plotting")
         smpplot[2].plot(array_diff_dict['calculated']['freq'], array_diff_dict['calculated']['phase_deg'],
                         label='Calculated Arrays Difference', color=array_colors['main'])
         if combined_test_data_flag:
@@ -321,11 +319,11 @@ def main():
             missing_data_statement = "***MISSING DATA FROM ANTENNA(S) "
             for element in missing_data:
                 missing_data_statement = missing_data_statement + element + " "
-            print missing_data_statement
+            print(missing_data_statement)
             plt.figtext(0.65, 0.06, missing_data_statement, fontsize=15)
 
         if data_description:
-            print data_description
+            print(data_description)
             plt.figtext(0.65, 0.04, data_description, fontsize=8)
 
         fig.savefig(plot_location + plot_filename)
@@ -351,10 +349,10 @@ def main():
 
         if time_file_loc != 'None':
             for ant, array in all_data.items():
-                array.tofile(plot_location + time_file_loc + ant + '.txt', sep="\n")
-            combined_main_array.tofile(plot_location + time_file_loc + 'main_array_combined.txt',
+                array.tofile(plot_location + time_file_loc + path_type + ant + '.txt', sep="\n")
+            combined_main_array.tofile(plot_location + time_file_loc + path_type + 'main_array_combined.txt',
                                        sep="\n")
-            combined_intf_array.tofile(plot_location + time_file_loc + 'intf_array_combined.txt',
+            combined_intf_array.tofile(plot_location + time_file_loc + path_type + 'intf_array_combined.txt',
                                        sep="\n")
 
     elif combined_test_data_flag:  # only combined data given
@@ -411,11 +409,11 @@ def main():
             missing_data_statement = "***MISSING DATA FROM ANTENNA(S) "
             for element in missing_data:
                 missing_data_statement = missing_data_statement + element + " "
-            print missing_data_statement
+            print(missing_data_statement)
             plt.figtext(0.4, 0.03, missing_data_statement, fontsize=15)
 
         if data_description:
-            print data_description
+            print(data_description)
             plt.figtext(0.4, 0.015, data_description, fontsize=8)
 
         fig.savefig(plot_location + plot_filename)
@@ -426,15 +424,15 @@ def main():
 
     if combined_test_data_flag:
         if time_file_str != 'None':
-            array_diff_dict['tested'].tofile(plot_location + time_file_str, sep="\n")
+            array_diff_dict['tested'].tofile(plot_location + path_type + time_file_str, sep="\n")
         if not main_data:
             combined_array_test['main_combined'].tofile(
-                plot_location + time_file_loc + 'main_array_combined.txt', sep="\n")
+                plot_location + time_file_loc + path_type + 'main_array_combined.txt', sep="\n")
             combined_array_test['intf_combined'].tofile(
-                plot_location + time_file_loc + 'intf_array_combined.txt', sep="\n")
+                plot_location + time_file_loc + path_type + 'intf_array_combined.txt', sep="\n")
     else:
         if time_file_str != 'None':
-            array_diff_dict['calculated'].tofile(plot_location + time_file_str, sep="\n")
+            array_diff_dict['calculated'].tofile(plot_location + path_type + time_file_str, sep="\n")
 
 
 if __name__ == main():
