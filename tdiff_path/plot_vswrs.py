@@ -5,9 +5,6 @@
 # differences between the antennas.
 
 import sys
-import time
-import math
-import random
 import fnmatch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -40,6 +37,7 @@ with open(plot_location + vswr_files_str) as f:
     vswr_files = json.load(f)
 
     all_files = vswr_files
+    print("All files: {}".format(vswr_files))
 #
 #
 # A list of 21 colors that will be assigned to antennas to keep plot colors consistent.
@@ -53,6 +51,7 @@ def main():
     data_description = []
     missing_data = []
     all_data = {}
+
     for ant, v in all_files.items():
         if ant == '_comment':
             data_description = v
@@ -62,10 +61,11 @@ def main():
             continue
         with open(data_location + v, 'r') as csvfile:
             for line in csvfile:
-                if fnmatch.fnmatch(line, 'Freq. [Hz*'):  # skip to header
+                # skip to header
+                if fnmatch.fnmatch(line, 'Freq [Hz*') or fnmatch.fnmatch(line, 'Frequency [Hz*'):
                     break
             else:  # no break
-                sys.exit('No Data in file {}'.format(v))
+                sys.exit('No data in file {}\n'.format(v))
             row = line.split(',')
             try:
                 freq_header = 'Freq*'
@@ -78,13 +78,13 @@ def main():
                 vswr_column = vswr_columns[0]
                 phase_header = 'Phase*'
                 phase_columns = [i for i in range(len(row)) if
-                                fnmatch.fnmatch(row[i], phase_header)]
+                                 fnmatch.fnmatch(row[i], phase_header)]
                 phase_column = phase_columns[0]
                 if (abs(vswr_column - freq_column) > 2) or (
                             abs(phase_column - freq_column) > 2):
                     print(freq_column, vswr_column, phase_column)
                     sys.exit('Data Phase and VSWR are given from different sweeps - please'
-                                 'check data file so first sweep has SWR and Phase info.')
+                             'check data file so first sweep has SWR and Phase info.')
             except:
                 sys.exit('Cannot find VSWR data.')
 
@@ -219,13 +219,17 @@ def main():
             missing_data_statement = missing_data_statement + element + " "
         print(missing_data_statement)
         plt.figtext(0.65, 0.05, missing_data_statement, fontsize=15)
+    else:
+        print("No missing data")
 
     if data_description:
-        print(data_description)
+        print("Data description: {}".format(data_description))
+
         plt.figtext(0.65, 0.10, data_description, fontsize=15)
 
     fig.savefig(plot_location + plot_filename)
     plt.close(fig)
+    print("Figure saved at: {}".format(plot_location + plot_filename))
 
 
 if __name__ == main():
