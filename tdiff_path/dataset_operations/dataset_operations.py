@@ -2,7 +2,6 @@ import numpy as np
 import math
 import sys
 from scipy import stats
-import random
 import pandas as pd
 
 
@@ -15,7 +14,7 @@ def unwrap_phase(data):
     try:
         assert 'phase' in data.columns or 'phase_deg' in data.columns or \
                'phase_rad' in data.columns
-    except:
+    except BaseException:
         raise Exception('Cannot Find Phase Column to Wrap in DataFrame')
 
     # If there is a jump from one datapoint to the next of more than 250 degrees,
@@ -24,7 +23,9 @@ def unwrap_phase(data):
 
     new_data = data.copy(deep=True)
     if 'phase_deg' in data.columns:
-        if np.amax(data['phase_deg']) < 180.0 and np.amin(data['phase_deg']) > -180.0:
+        if np.amax(
+                data['phase_deg']) < 180.0 and np.amin(
+                data['phase_deg']) > -180.0:
             for num, entry in enumerate(data['phase_deg']):
                 if num == 0:
                     continue
@@ -46,11 +47,14 @@ def unwrap_phase(data):
                     for i in range(num, len(new_data)):
                         new_data['phase'][i] += 360.0
     if 'phase_rad' in data.columns:
-        if np.amax(data['phase_rad']) < math.pi and np.amin(data['phase_rad']) > -math.pi:
+        if np.amax(
+                data['phase_rad']) < math.pi and np.amin(
+                data['phase_rad']) > -math.pi:
             for num, entry in enumerate(data['phase_rad']):
                 if num == 0:
                     continue
-                if entry > (250.0 * math.pi / 180.0) + data['phase_rad'][num - 1]:
+                if entry > (250.0 * math.pi / 180.0) + \
+                        data['phase_rad'][num - 1]:
                     for i in range(num, len(data)):
                         new_data['phase_rad'][i] -= 2 * math.pi
                 elif entry < -(250.0 * math.pi / 180.0) + data['phase_rad'][num - 1]:
@@ -70,7 +74,7 @@ def wrap_phase(data):
     try:
         assert 'phase' in data.columns or 'phase_deg' in data.columns or \
                'phase_rad' in data.columns
-    except:
+    except BaseException:
         raise Exception('Cannot Find Phase Column to Wrap in DataFrame')
 
     # Confine the phase within 180 degrees to -180 degrees to wrap it.
@@ -88,7 +92,9 @@ def wrap_phase(data):
                         phase_data[i] = phase_data[i] + 360.0
             new_data['phase'] = phase_data
     if 'phase_deg' in data.columns:
-        if np.amax(data['phase_deg']) > 180.0 or np.amin(data['phase_deg']) < -180.0:
+        if np.amax(
+                data['phase_deg']) > 180.0 or np.amin(
+                data['phase_deg']) < -180.0:
             phase_data = np.array(new_data['phase_deg'])
             for num, entry in enumerate(phase_data):
                 if entry > 180.0:
@@ -99,7 +105,9 @@ def wrap_phase(data):
                         phase_data[i] = phase_data[i] + 360.0
             new_data['phase_deg'] = phase_data
     if 'phase_rad' in data.columns:
-        if np.amax(data['phase_rad']) > math.pi or np.amin(data['phase_rad']) < -math.pi:
+        if np.amax(
+                data['phase_rad']) > math.pi or np.amin(
+                data['phase_rad']) < -math.pi:
             phase_data = np.array(new_data['phase_rad'])
             for num, entry in enumerate(phase_data):
                 if entry > math.pi:
@@ -116,8 +124,8 @@ def wrap_phase(data):
 def wrap_phase_dictionary(dict_with_freq_and_phase):
     """
     Take a dictionary with values that are numpy arrays with dtypes of freq and any of phase,
-    phase_deg, or phase_rad and wrap all values in the dictionary. 
-    :param dict_with_freq_and_phase: 
+    phase_deg, or phase_rad and wrap all values in the dictionary.
+    :param dict_with_freq_and_phase:
     :return: dictionary with all values of numpy arrays having phase wrapped.
     """
     new_dict = {}
@@ -157,7 +165,8 @@ def reduce_frequency_array(dict_of_dataframes_with_freq_column, freqs=None):
 
     # get the minimum dataset length of datasets in the dictionary in case the data was
     # recorded using a different number of points.
-    min_dataset_length = get_min_dataset_length(dict_of_dataframes_with_freq_column)
+    min_dataset_length = get_min_dataset_length(
+        dict_of_dataframes_with_freq_column)
     short_dataset_keys = []  # list of keys with the minimum dataset length
     long_datasets = {}
     for ant, dataset in dict_of_dataframes_with_freq_column.items():
@@ -173,7 +182,8 @@ def reduce_frequency_array(dict_of_dataframes_with_freq_column, freqs=None):
 
     # Check if all the short datasets have the same values for frequency.
     for ant in short_dataset_keys:
-        for index, entry in dict_of_dataframes_with_freq_column[ant].iterrows():
+        for index, entry in dict_of_dataframes_with_freq_column[ant].iterrows(
+        ):
             # print(entry['freq'] - reference_frequency[value])
             if not np.array_equal(entry['freq'], reference_frequency[index]):
                 sys.exit()
@@ -181,24 +191,28 @@ def reduce_frequency_array(dict_of_dataframes_with_freq_column, freqs=None):
     for ant, length in long_datasets.items():
         lines_to_delete = []
         if (length - 1) % (min_dataset_length - 1) == 0:
-            integer = length/min_dataset_length
-            for value, entry in dict_of_dataframes_with_freq_column[ant].iterrows():
-                #print(value, entry)
+            integer = length / min_dataset_length
+            for value, entry in dict_of_dataframes_with_freq_column[ant].iterrows(
+            ):
                 if value == 0 and entry['freq'] == reference_frequency[0]:
                     continue
                 elif value % integer != 0:
                     lines_to_delete.append(value)
-                elif entry['freq'] != reference_frequency[value/integer]:
-                    print(entry['freq'], reference_frequency[value/integer])
-                    raise Exception('Datasets are in multiple lengths but frequency axis '
-                              'values are not the same when divided, length {} broken down to length '
-                              '{}'.format(length, min_dataset_length))
-            dict_of_dataframes_with_freq_column[ant].drop(dict_of_dataframes_with_freq_column[ant
-                                                          ].index[lines_to_delete], inplace=True)
+                elif entry['freq'] != reference_frequency[value / integer]:
+                    print(entry['freq'], reference_frequency[value / integer])
+                    raise Exception(
+                        'Datasets are in multiple lengths but frequency axis '
+                        'values are not the same when divided, length {} broken down to length '
+                        '{}'.format(
+                            length, min_dataset_length))
+            dict_of_dataframes_with_freq_column[ant].drop(
+                dict_of_dataframes_with_freq_column[ant].index[lines_to_delete], inplace=True)
         else:
-            raise Exception('Please ensure datasets are the same length and frequency axes '
-                     'are the same, length {} is greater than minimum dataset length '
-                     '{}'.format(length, min_dataset_length))
+            raise Exception(
+                'Please ensure datasets are the same length and frequency axes '
+                'are the same, length {} is greater than minimum dataset length '
+                '{}'.format(
+                    length, min_dataset_length))
 
     return dict_of_dataframes_with_freq_column
 
@@ -221,7 +235,8 @@ def interp_frequency_array(dict_of_arrays_with_freq_dtype):
     :return: dict_of_arrays_with_freq_dtype, where all arrays are the same length.
     """
 
-    # find latest starting frequency and earliest end frequency of the arrays in the dict.
+    # find latest starting frequency and earliest end frequency of the arrays
+    # in the dict.
     latest_starting_freq = 0
     earliest_ending_freq = 10000000000
     max_data_points = 0
@@ -252,11 +267,12 @@ def interp_frequency_array(dict_of_arrays_with_freq_dtype):
     new_dict_of_arrays = {}
 
     for path, array in dict_of_arrays_with_freq_dtype.items():
-        new_dict_of_arrays[path] = np.zeros(len_of_new_arrays, dtype=array.dtype)
+        new_dict_of_arrays[path] = np.zeros(
+            len_of_new_arrays, dtype=array.dtype)
         new_dict_of_arrays[path]['freq'] = reference_frequency_array
         for dtype in array.dtype.names:
-            new_dict_of_arrays[path][dtype] = np.interp(reference_frequency_array,
-                                                        array['freq'], array[dtype])
+            new_dict_of_arrays[path][dtype] = np.interp(
+                reference_frequency_array, array['freq'], array[dtype])
 
     return new_dict_of_arrays
 
@@ -275,7 +291,10 @@ def get_slope_of_phase_in_nano(phase_data, freq_hz):
     # np.insert(dy, [0], delay_freq_list, axis=1)
 
     if len(freq_hz) != len(phase_data):
-        sys.exit('Problem with slope array lengths differ {} {}'.format(len(freq_hz), len(phase_data)))
+        sys.exit(
+            'Problem with slope array lengths differ {} {}'.format(
+                len(freq_hz),
+                len(phase_data)))
 
     freq_data = [i * 2 * math.pi for i in freq_hz]
 
@@ -321,10 +340,12 @@ def combine_arrays(list_of_dataframes):
         # print k
         if num == 0:
             continue  # skip, do not add
-        for rowc, rowa in zip(combined_data.iterrows(), channel_dataframe.iterrows()):
+        for rowc, rowa in zip(combined_data.iterrows(),
+                              channel_dataframe.iterrows()):
             c = rowc[1]
             a = rowa[1]
-            # convert to rads - negative because we are using proof using cos(x-A)
+            # convert to rads - negative because we are using proof using
+            # cos(x-A)
             phase_rads1 = -c['phase_rad'] % (2.0 * math.pi)
             phase_rads2 = -a['phase_rad'] % (2.0 * math.pi)
 
@@ -332,15 +353,13 @@ def combine_arrays(list_of_dataframes):
             amplitude_1 = 10 ** (c['magnitude'] / 20)
             amplitude_2 = 10 ** (a['magnitude'] / 20)
 
-            combined_amp_squared = (
-                amplitude_1 ** 2 + amplitude_2 ** 2 + 2 * amplitude_1 * amplitude_2 * math.cos(
-                    phase_rads1 - phase_rads2))
+            combined_amp_squared = (amplitude_1 ** 2 + amplitude_2 ** 2 + 2 * amplitude_1 * amplitude_2 *
+                                    math.cos(phase_rads1 - phase_rads2))
             combined_amp = math.sqrt(combined_amp_squared)
             # we based it on amplitude of 1 at each antenna.
             c['magnitude'] = 20 * math.log(combined_amp, 10)
-            combined_phase = math.atan2(
-                amplitude_1 * math.sin(phase_rads1) + amplitude_2 * math.sin(phase_rads2),
-                amplitude_1 * math.cos(phase_rads1) + amplitude_2 * math.cos(phase_rads2))
+            combined_phase = math.atan2(amplitude_1 * math.sin(phase_rads1) + amplitude_2 * math.sin(phase_rads2),
+                                        amplitude_1 * math.cos(phase_rads1) + amplitude_2 * math.cos(phase_rads2))
 
             # this is negative so make it positive cos(x-theta)
             c['phase_rad'] = -combined_phase
@@ -371,7 +390,7 @@ def vswr_to_single_receive_direction(channel_name, data, cable_loss_array):
     if not np.array_equal(data['freq'], cable_loss_array['freq']):
         sys.exit('Frequencies do not match in datasets - exiting')
 
-    #dtypes = [(x, str(y[0])) for x, y in sorted(data.dtype.fields.items(), key=lambda
+    # dtypes = [(x, str(y[0])) for x, y in sorted(data.dtype.fields.items(), key=lambda
     #    k: k[1])] # get list of dtypes sorted by column
 
     cannot_convert = False
@@ -379,7 +398,7 @@ def vswr_to_single_receive_direction(channel_name, data, cable_loss_array):
         try:
             VSWR = entry['vswr']
             cable_loss = cable_loss_array['loss'][num]
-        except:
+        except BaseException:
             raise Exception('No vswr column in this dataframe.')
 
         return_loss_dB = 20 * math.log(((VSWR + 1) / (VSWR - 1)), 10)
@@ -397,29 +416,30 @@ def vswr_to_single_receive_direction(channel_name, data, cable_loss_array):
             cannot_convert = True
             break
 
-        reflection_db_at_balun = 10 * math.log((watts_reflected_at_balun /
-                                                watts_incident_at_balun), 10)
-        transmission_db_at_balun = 10 * math.log(watts_transmitted_at_balun /
-                                                 watts_incident_at_balun, 10)
+        reflection_db_at_balun = 10 * math.log((watts_reflected_at_balun / watts_incident_at_balun), 10)
+        transmission_db_at_balun = 10 * math.log(watts_transmitted_at_balun / watts_incident_at_balun, 10)
 
         # ASSUMING we have a symmetrical mismatch point at the balun and transmission
         # S12 = S21, so transmission_db_at_balun out = the received dB at balun on
         # receive path.
-        # Incoming power from antenna will have mismatch point and then cable losses.
+        # Incoming power from antenna will have mismatch point and then cable
+        # losses.
         receive_power = transmission_db_at_balun - cable_loss
         receive_power = round(receive_power, 5)
-        data.loc[num,'magnitude'] = receive_power
+        data.loc[num, 'magnitude'] = receive_power
 
     if cannot_convert:
-        print("Channel {} VSWR is not being converted to a single direction.".format(channel_name))
-        print("    There is no power incident at the balun at some frequencies, which would "
-              "suggest your cable loss model is too lossy.")
+        print("Channel {} VSWR is not being converted to a single direction.".format(
+            channel_name))
+        print(
+            "    There is no power incident at the balun at some frequencies, which would "
+            "suggest your cable loss model is too lossy.")
         print("    Going to convert the VSWR to a return loss in dB only.")
         for num, entry in data.iterrows():
             try:
                 VSWR = entry['vswr']
                 cable_loss = cable_loss_array['loss'][num]
-            except:
+            except BaseException:
                 raise Exception('No vswr column in this dataframe.')
 
             return_loss_dB = 20 * math.log(((VSWR + 1) / (VSWR - 1)), 10)
@@ -451,7 +471,8 @@ def reflection_to_transmission_phase(incoming_data):
     :return: new_data: data with phase values adjusted to be a single direction.
     """
 
-    data = unwrap_phase(incoming_data)  # needs to be a phase-unwrapped dataset.
+    # needs to be a phase-unwrapped dataset.
+    data = unwrap_phase(incoming_data)
 
     new_data = data
     if 'phase' in data.columns:
@@ -503,8 +524,8 @@ def create_linear_fit_dictionary(array):
     # get the line so that we can determine how good the assumption is that this path is
     # linear.
 
-    slope, intercept, rvalue, pvalue, stderr = stats.linregress(data_array['freq'],
-                                                                data_array['phase_rad'])
+    slope, intercept, rvalue, pvalue, stderr = stats.linregress(
+        data_array['freq'], data_array['phase_rad'])
     offset_of_best_fit = []
     best_fit_line = []
     for index, entry in data_array.iterrows():
@@ -515,16 +536,23 @@ def create_linear_fit_dictionary(array):
         offset_of_best_fit.append(entry['phase_rad'] - best_fit_value)
 
     # Convert both lists to numpy arrays and wrap the phase data.
-    best_fit_line = pd.DataFrame(np.array(best_fit_line), columns=['phase_rad'])
+    best_fit_line = pd.DataFrame(
+        np.array(best_fit_line),
+        columns=['phase_rad'])
     best_fit_line = wrap_phase(best_fit_line)
-    offset_of_best_fit = pd.DataFrame(np.array(offset_of_best_fit), columns=['phase_rad'])
+    offset_of_best_fit = pd.DataFrame(
+        np.array(offset_of_best_fit),
+        columns=['phase_rad'])
     offset_of_best_fit = wrap_phase(offset_of_best_fit)
 
-    data_array_linear_fit_dict = {'slope': slope, 'intercept': intercept, 'rvalue':
-                                  rvalue, 'pvalue': pvalue, 'stderr': stderr,
-                                  'offset_of_best_fit_rads':
-                                  offset_of_best_fit['phase_rad'], 'time_delay_ns':
-                                  round(slope / (2 * math.pi), 11) * -1e9,
+    data_array_linear_fit_dict = {'slope': slope,
+                                  'intercept': intercept,
+                                  'rvalue': rvalue,
+                                  'pvalue': pvalue,
+                                  'stderr': stderr,
+                                  'offset_of_best_fit_rads': offset_of_best_fit['phase_rad'],
+                                  'time_delay_ns': round(slope / (2 * math.pi),
+                                                         11) * -1e9,
                                   'best_fit_line_rads': best_fit_line}
 
     return data_array_linear_fit_dict

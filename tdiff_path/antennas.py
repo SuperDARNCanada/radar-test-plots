@@ -6,13 +6,11 @@
 # VSWR dataset.
 
 import sys
-import time
 import fnmatch
-import random
 import math
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import stats, constants
+from scipy import constants
 import json
 import csv
 
@@ -38,10 +36,29 @@ with open(plot_location + vswr_files_str) as f:
 
 #
 #
-# A list of 21 colors that will be assigned to antennas to keep plot colors consistent.
-hex_colors = ['#ff1a1a', '#993300', '#ffff1a', '#666600', '#ff531a', '#cc9900', '#99cc00',
-              '#7a7a52', '#004d00', '#33ff33', '#26734d', '#003366', '#33cccc', '#00004d',
-              '#5500ff', '#a366ff', '#ff00ff', '#e6005c', '#ffaa80', '#999999']
+# A list of 21 colors that will be assigned to antennas to keep plot
+# colors consistent.
+hex_colors = [
+    '#ff1a1a',
+    '#993300',
+    '#ffff1a',
+    '#666600',
+    '#ff531a',
+    '#cc9900',
+    '#99cc00',
+    '#7a7a52',
+    '#004d00',
+    '#33ff33',
+    '#26734d',
+    '#003366',
+    '#33cccc',
+    '#00004d',
+    '#5500ff',
+    '#a366ff',
+    '#ff00ff',
+    '#e6005c',
+    '#ffaa80',
+    '#999999']
 hex_dictionary = {'other': '#000000'}
 
 # if we assume S12 and S21 are the same (safe for feedlines/antennas only)
@@ -51,26 +68,26 @@ hex_dictionary = {'other': '#000000'}
 
 # estimated cable losses (LMR-400) @ 0.7 db/100ft * 600ft
 if 'Saskatoon' in radar_name or 'sas' in radar_name or 'SAS' in radar_name:
-    #cable_loss = 3.0  # in dB
+    # cable_loss = 3.0  # in dB
     cable_length = 600  # in ft
     cable_type = 'RG8'
 elif 'Prince George' in radar_name or 'Prince_George' in radar_name or 'pgr' in radar_name or \
-                'PGR' in radar_name:
-    #cable_loss = 3.0  # in dB
+        'PGR' in radar_name:
+    # cable_loss = 3.0  # in dB
     cable_length = 600  # in ft
     cable_type = 'RG8'
 elif 'Inuvik' in radar_name or 'inv' in radar_name or 'INV' in radar_name:
-    #cable_loss = 2.5  # in dB
+    # cable_loss = 2.5  # in dB
     cable_length = 600  # in ft
-    cable_type = 'LMR400' # TODO check this
+    cable_type = 'LMR400'  # TODO check this
 elif 'Rankin Inlet' in radar_name or 'Rankin_Inlet' in radar_name or 'rkn' in radar_name or \
-                'RKN' in radar_name or 'Rankin-Inlet' in radar_name:
-    #cable_loss = 2.0  # in dB
+        'RKN' in radar_name or 'Rankin-Inlet' in radar_name:
+    # cable_loss = 2.0  # in dB
     cable_length = 600  # in ft
-    cable_type = 'LMR400' # TODO check this
+    cable_type = 'LMR400'  # TODO check this
 elif 'Clyde River' in radar_name or 'Clyde_River' in radar_name or 'cly' in radar_name or \
-                'CLY' in radar_name or 'Clyde-River' in radar_name:
-    #cable_loss = 2.5  # in dB
+        'CLY' in radar_name or 'Clyde-River' in radar_name:
+    # cable_loss = 2.5  # in dB
     cable_length = 600  # in ft
     cable_type = 'LMR400'
 else:
@@ -92,9 +109,9 @@ else:
 def cable_loss(cable_length, cable_type):
     """
     Return the cable loss model of the given cable_type for the given cable_length.
-    :param cable_length: 
-    :param cable_type: 
-    :return: 
+    :param cable_length:
+    :param cable_type:
+    :return:
     """
 
 
@@ -130,13 +147,14 @@ def main():
                 vswr_column = vswr_columns[0]
                 phase_header = 'Phase*'
                 phase_columns = [i for i in range(len(row)) if
-                                fnmatch.fnmatch(row[i], phase_header)]
+                                 fnmatch.fnmatch(row[i], phase_header)]
                 phase_column = phase_columns[0]
                 if (abs(vswr_column - freq_column) > 2) or (
-                            abs(phase_column - freq_column) > 2):
-                    sys.exit('Data Phase and VSWR are given from different sweeps - please'
-                                 'check data file so first sweep has SWR and Phase info.')
-            except:
+                        abs(phase_column - freq_column) > 2):
+                    sys.exit(
+                        'Data Phase and VSWR are given from different sweeps - please'
+                        'check data file so first sweep has SWR and Phase info.')
+            except BaseException:
                 sys.exit('Cannot find VSWR data.')
             next(csvfile)  # skip over header
             csv_reader = csv.reader(csvfile)
@@ -147,7 +165,7 @@ def main():
                     freq = float(row[freq_column])
                     VSWR = float(row[vswr_column])
                     phase = float(row[phase_column])
-                except:
+                except BaseException:
                     continue
 
                 data.append((freq, VSWR, phase, 0.0))
@@ -158,7 +176,7 @@ def main():
 
             phase_wrapped_data = wrap_phase(data)
 
-            #print data[-1]
+            # print data[-1]
 
             if len(data) < min_dataset_length:
                 min_dataset_length = len(data)
@@ -179,13 +197,7 @@ def main():
 
     # create cable loss array based on frequency array TODO
 
-
-
-
-
     # WORKING HERE THE REST NEEDS TO BE LOOKED AT
-
-
 
     reflection_dict, freq_array = correct_frequency_array(reflection_dict)
 
@@ -195,7 +207,7 @@ def main():
             freq = float(row[freq_column])
             VSWR = float(row[vswr_column])
             phase = float(row[phase_column])
-        except:
+        except BaseException:
             continue
 
         return_loss_dB = 20 * math.log(((VSWR + 1) / (VSWR - 1)), 10)
@@ -213,21 +225,20 @@ def main():
         w_transmitted_at_balun = power_reaching_balun_w - w_reflected_at_balun
         # print "transmitted w at balun is {}".format(w_transmitted_at_balun)
         if w_transmitted_at_balun <= 0:
-            print radar_name, vswr_files_str
-            print "Antenna: {}".format(k)
-            print freq
-            print "WRONG"
-            print "This would suggest your cable loss model is too lossy."
-            print "Cable loss = {} db".format(cable_loss)
+            print(radar_name, vswr_files_str)
+            print("Antenna: {}".format(k))
+            print(freq)
+            print("WRONG")
+            print("This would suggest your cable loss model is too lossy.")
+            print("Cable loss = {} db".format(cable_loss))
             sys.exit()
-        reflection_dB_at_balun = 10 * math.log((w_reflected_at_balun /
-                                                power_reaching_balun_w), 10)
-        transmission_dB_at_balun = 10 * math.log(w_transmitted_at_balun /
-                                                 power_reaching_balun_w, 10)
+        reflection_dB_at_balun = 10 * math.log((w_reflected_at_balun / power_reaching_balun_w), 10)
+        transmission_dB_at_balun = 10 * math.log(w_transmitted_at_balun / power_reaching_balun_w, 10)
 
         # ASSUMING we have a symmetrical mismatch point at the balun and transmission
         # S12 = S21.
-        # power incoming from antenna will have mismatch point and then cable losses.
+        # power incoming from antenna will have mismatch point and then cable
+        # losses.
         receive_power = transmission_dB_at_balun - cable_loss
         receive_power = round(receive_power, 5)
         reflection_data.append((freq, receive_power, float(phase), 0.0))
@@ -246,13 +257,14 @@ def main():
     if len(data) < min_dataset_length:
         min_dataset_length = len(data)
 
-
-    #print(reflection_dict['I0'][-1])
+    # print(reflection_dict['I0'][-1])
 
     # Get expected phase of feedline, assuming 600 ft.
     feedline_distance_ft = 217 * 3.28 * 0.66 + 50.0
     velocity_factor_feedline = 0.66
-    time_ns = feedline_distance_ft/(3.28 * constants.speed_of_light * velocity_factor_feedline)  #66% propagation in RG8, .82 in rg-8x
+    # 66% propagation in RG8, .82 in rg-8x
+    time_ns = feedline_distance_ft / \
+        (3.28 * constants.speed_of_light * velocity_factor_feedline)
     # estimate phase offset through the feedline in one direction.
 
     # subtract the line with the slope of the feedline.
@@ -291,10 +303,11 @@ def main():
         phase_array = np.array(phase_list)
         #intercept = phase_array[0]
         feedline_phase_estimate_array_reflection = 2 * feedline_phase_estimate_array
-        new_array = np.subtract(phase_array, feedline_phase_estimate_array_reflection)
+        new_array = np.subtract(phase_array,
+                                feedline_phase_estimate_array_reflection)
         antenna_data[path] = new_array
 
-    all_data_array = np.concatenate((['Freq'],freq_array))
+    all_data_array = np.concatenate((['Freq'], freq_array))
 
     for path, data_array in antenna_data.items():
         phase_array = np.concatenate(([path], data_array))
@@ -308,10 +321,11 @@ def main():
     numplots = 3
     fig, smpplot = plt.subplots(numplots, sharex=True, figsize=(18, 18))
     xmin, xmax, ymin, ymax = smpplot[0].axis(xmin=8e6, xmax=20e6)
-    smpplot[numplots -1].set_xlabel('Frequency (Hz)')
+    smpplot[numplots - 1].set_xlabel('Frequency (Hz)')
     smpplot[0].set_title(plot_title)
 
-    smpplot[0].set_ylabel('Phase Estimate of\nAntennas [degrees]')  # from antenna to feedline end at building.
+    # from antenna to feedline end at building.
+    smpplot[0].set_ylabel('Phase Estimate of\nAntennas [degrees]')
 
     for ant, dataset in antenna_data.items():
         smpplot[0].plot(freq_array, dataset, label='{}'.format(ant),
@@ -319,34 +333,40 @@ def main():
 
     smpplot[0].legend(fontsize=10, ncol=4)
 
-    smpplot[1].set_ylabel('Phase Estimate of Feedline [degrees]\nFeedline Length = {} ft,\nFeedline'
-                          ' Velocity Factor = {}'.format(feedline_distance_ft,
-                                                         velocity_factor_feedline))  # from antenna to feedline end at building.
+    smpplot[1].set_ylabel(
+        'Phase Estimate of Feedline [degrees]\nFeedline Length = {} ft,\nFeedline'
+        ' Velocity Factor = {}'.format(
+            feedline_distance_ft,
+            velocity_factor_feedline))  # from antenna to feedline end at building.
 
     smpplot[1].plot(freq_array, feedline_phase_estimate_array)
 
-    smpplot[2].set_ylabel('Reflection Phase Offset of\nAntenna + Feedline [degrees]')  # from antenna to feedline end at building.
+    # from antenna to feedline end at building.
+    smpplot[2].set_ylabel(
+        'Reflection Phase Offset of\nAntenna + Feedline [degrees]')
 
     for ant, dataset in reflection_dict.items():
-        smpplot[2].plot(freq_array, dataset['phase_deg_unwrap'], label='{}'.format(ant),
-                        color=hex_dictionary[ant])
+        smpplot[2].plot(
+            freq_array,
+            dataset['phase_deg_unwrap'],
+            label='{}'.format(ant),
+            color=hex_dictionary[ant])
 
     smpplot[2].legend(fontsize=10, ncol=4)
 
-
     for plot in range(numplots):
         smpplot[plot].grid()
-    print "plotting"
+    print("plotting")
 
     if missing_data:  # not empty
         missing_data_statement = "***MISSING DATA FROM ANTENNA(S) "
         for element in missing_data:
             missing_data_statement = missing_data_statement + element + " "
-        print missing_data_statement
+        print(missing_data_statement)
         plt.figtext(0.65, 0.05, missing_data_statement, fontsize=15)
 
     if data_description:
-        print data_description
+        print(data_description)
         plt.figtext(0.65, 0.10, data_description, fontsize=15)
 
     fig.savefig(plot_location + plot_filename)

@@ -11,7 +11,7 @@ Steps:
 
 - Create a json file (example: 'vswr-files.json') with the following entries (this is an example) and place in a directory where you would like to have the VSWR plot (example: /Sync/Sites/Saskatoon/Trips/2021/20210127/vswr_main/DataAnalysis/). Note that the entries for each antenna ("M0", "I0", "I1", etc...) should correspond to the name of a single csv file like 'sas-vswr-full0.csv'.
 
-    ```powershell
+    ```json
     {
         "M0" : "sas-vswr-full0.csv",
         "M1" : "sas-vswr-full1.csv",

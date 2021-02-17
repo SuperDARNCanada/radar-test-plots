@@ -5,7 +5,6 @@
 # from the length of cable that is there on the interferometer array.
 
 import sys
-import time
 import fnmatch
 import random
 import math
@@ -37,10 +36,29 @@ sys.path.append(data_location)
 with open(plot_location + path_file_str) as f:
     path_files = json.load(f)
 
-# A list of 21 colors that will be assigned to antennas to keep plot colors consistent.
-hex_colors = ['#ff1a1a', '#993300', '#ffff1a', '#666600', '#ff531a', '#cc9900', '#99cc00',
-              '#7a7a52', '#004d00', '#33ff33', '#26734d', '#003366', '#33cccc', '#00004d',
-              '#5500ff', '#a366ff', '#ff00ff', '#e6005c', '#ffaa80', '#999999']
+# A list of 21 colors that will be assigned to antennas to keep plot
+# colors consistent.
+hex_colors = [
+    '#ff1a1a',
+    '#993300',
+    '#ffff1a',
+    '#666600',
+    '#ff531a',
+    '#cc9900',
+    '#99cc00',
+    '#7a7a52',
+    '#004d00',
+    '#33ff33',
+    '#26734d',
+    '#003366',
+    '#33cccc',
+    '#00004d',
+    '#5500ff',
+    '#a366ff',
+    '#ff00ff',
+    '#e6005c',
+    '#ffaa80',
+    '#999999']
 hex_dictionary = {'other': '#000000'}
 
 
@@ -58,7 +76,7 @@ def main():
             missing_data.append(k)
             continue
         if v == 'estimate_intf':
-            estimate_data.append(k) # TODO estimate with a given slope
+            estimate_data.append(k)  # TODO estimate with a given slope
             continue
         with open(data_location + v, 'r') as csvfile:
             for line in csvfile:
@@ -73,17 +91,18 @@ def main():
                                 fnmatch.fnmatch(row[i], freq_header)]
                 magnitude_header = '*Magnit*'
                 magnitude_columns = [i for i in range(len(row)) if
-                                fnmatch.fnmatch(row[i], magnitude_header)]
+                                     fnmatch.fnmatch(row[i], magnitude_header)]
                 freq_column = freq_columns[0]
                 magnitude_column = magnitude_columns[0]
                 phase_header = '*Phase*'
                 phase_columns = [i for i in range(len(row)) if
-                                fnmatch.fnmatch(row[i], phase_header)]
+                                 fnmatch.fnmatch(row[i], phase_header)]
                 phase_column = phase_columns[0]
-            except:
+            except BaseException:
                 sys.exit('Cannot find data {}.'.format(v))
             i = 0
-            while (abs(magnitude_column - freq_column) > 2) or (abs(phase_column - freq_column) > 2):
+            while (abs(magnitude_column - freq_column) >
+                   2) or (abs(phase_column - freq_column) > 2):
                 i += 1
                 try:
                     freq_column = freq_columns[i]
@@ -91,8 +110,9 @@ def main():
                         phase_column = phase_columns[i]
                     if phase_column > magnitude_column:
                         magnitude_column = magnitude_columns[i]
-                except:
-                    sys.exit('Data Phase and Magnitude are given from different sweeps.')
+                except BaseException:
+                    sys.exit(
+                        'Data Phase and Magnitude are given from different sweeps.')
             next(csvfile)  # skip over header
             csv_reader = csv.reader(csvfile)
 
@@ -102,7 +122,7 @@ def main():
                     freq = float(row[freq_column])
                     mag = float(row[magnitude_column])
                     phase = float(row[phase_column])
-                except:
+                except BaseException:
                     continue
                 phase_rad = float(phase) * math.pi / 180.0
                 data.append((freq, mag, float(phase), phase_rad))
@@ -129,37 +149,45 @@ def main():
 
     linear_fit_dict = {}
     # combined main array slope
-    slope, intercept, rvalue, pvalue, stderr = stats.linregress(combined_main_array['freq'],
-                                                                combined_main_array['phase_rad'])
+    slope, intercept, rvalue, pvalue, stderr = stats.linregress(
+        combined_main_array['freq'], combined_main_array['phase_rad'])
     offset_of_best_fit = []
     for entry in combined_main_array:
         best_fit_value = slope * entry['freq'] + intercept
         offset_of_best_fit.append(entry['phase_rad'] - best_fit_value)
-    linear_fit_dict['M_all'] = {'slope': slope, 'intercept': intercept, 'rvalue': rvalue,
-                                'pvalue': pvalue, 'stderr': stderr,
+    linear_fit_dict['M_all'] = {'slope': slope,
+                                'intercept': intercept,
+                                'rvalue': rvalue,
+                                'pvalue': pvalue,
+                                'stderr': stderr,
                                 'offset_of_best_fit': np.array(offset_of_best_fit),
-                                'time_delay_ns': round(slope / (2 * math.pi), 11) * -10 ** 9}
+                                'time_delay_ns': round(slope / (2 * math.pi),
+                                                       11) * -10 ** 9}
 
     # TODO if intf_data is empty!
     if not intf_data:  # if empty
         if estimate_data:  # if not empty
             data = []
             for i in range(0, main_dataset_length):
-                freq = 8000000 + (12000000/(main_dataset_length - 1)) * i
+                freq = 8000000 + (12000000 / (main_dataset_length - 1)) * i
                 phase_rad = slope * freq + intercept
                 phase_deg = phase_rad * 180.0 / math.pi
                 data.append((freq, 0.0, phase_deg, phase_rad))
-            intf_data = {'I0': np.array(data, dtype=[('freq', 'i4'), ('magnitude', 'f4'),
-                                              ('phase_deg', 'f4'), ('phase_rad', 'f4')])}
+            intf_data = {
+                'I0': np.array(
+                    data, dtype=[
+                        ('freq', 'i4'), ('magnitude', 'f4'), ('phase_deg', 'f4'), ('phase_rad', 'f4')])}
             hex_dictionary['I0'] = hex_colors[0]
             hex_colors.remove(hex_dictionary['I0'])
         else:
             data = []
             for i in range(0, main_dataset_length):
-                freq = 8000000 + (12000000/(main_dataset_length - 1)) * i
+                freq = 8000000 + (12000000 / (main_dataset_length - 1)) * i
                 data.append((freq, 0.0, 0.0, 0.0))
-            intf_data = {'I0': np.array(data, dtype=[('freq', 'i4'), ('magnitude', 'f4'),
-                                              ('phase_deg', 'f4'), ('phase_rad', 'f4')])}
+            intf_data = {
+                'I0': np.array(
+                    data, dtype=[
+                        ('freq', 'i4'), ('magnitude', 'f4'), ('phase_deg', 'f4'), ('phase_rad', 'f4')])}
             hex_dictionary['I0'] = hex_colors[0]
             hex_colors.remove(hex_dictionary['I0'])
 
@@ -171,30 +199,40 @@ def main():
     # for each antenna, get the linear fit and plot the offset from linear fit.
 
     for ant, dataset in all_data.items():
-        slope, intercept, rvalue, pvalue, stderr = stats.linregress(dataset['freq'],
-                                                                    dataset['phase_rad'])
-        linear_fit_dict[ant] = {'slope': slope, 'intercept': intercept, 'rvalue': rvalue,
-                                'pvalue': pvalue, 'stderr': stderr}
+        slope, intercept, rvalue, pvalue, stderr = stats.linregress(
+            dataset['freq'], dataset['phase_rad'])
+        linear_fit_dict[ant] = {
+            'slope': slope,
+            'intercept': intercept,
+            'rvalue': rvalue,
+            'pvalue': pvalue,
+            'stderr': stderr}
         offset_of_best_fit = []
         for entry in dataset:
             best_fit_value = slope * entry['freq'] + intercept
             offset_of_best_fit.append(entry['phase_rad'] - best_fit_value)
-        linear_fit_dict[ant]['offset_of_best_fit'] = np.array(offset_of_best_fit)
-        linear_fit_dict[ant]['time_delay_ns'] = round(slope / (2 * math.pi), 11) * -10 ** 9
+        linear_fit_dict[ant]['offset_of_best_fit'] = np.array(
+            offset_of_best_fit)
+        linear_fit_dict[ant]['time_delay_ns'] = round(
+            slope / (2 * math.pi), 11) * -10 ** 9
 
     combined_intf_array = combine_arrays(intf_data)
 
     # combined intf array slope
-    slope, intercept, rvalue, pvalue, stderr = stats.linregress(combined_intf_array['freq'],
-                                                                combined_intf_array['phase_rad'])
+    slope, intercept, rvalue, pvalue, stderr = stats.linregress(
+        combined_intf_array['freq'], combined_intf_array['phase_rad'])
     offset_of_best_fit = []
     for entry in combined_intf_array:
         best_fit_value = slope * entry['freq'] + intercept
         offset_of_best_fit.append(entry['phase_rad'] - best_fit_value)
-    linear_fit_dict['I_all'] = {'slope': slope, 'intercept': intercept, 'rvalue': rvalue,
-                                'pvalue': pvalue, 'stderr': stderr,
+    linear_fit_dict['I_all'] = {'slope': slope,
+                                'intercept': intercept,
+                                'rvalue': rvalue,
+                                'pvalue': pvalue,
+                                'stderr': stderr,
                                 'offset_of_best_fit': np.array(offset_of_best_fit),
-                                'time_delay_ns': round(slope / (2 * math.pi), 11) * -10 ** 9}
+                                'time_delay_ns': round(slope / (2 * math.pi),
+                                                       11) * -10 ** 9}
 
     array_diff = []
     for m, i in zip(combined_main_array, combined_intf_array):
@@ -204,8 +242,9 @@ def main():
             phase = -360 + phase
         time_ns = phase * 10**9 / (freq * 360.0)
         array_diff.append((freq, phase, time_ns))
-    array_diff = np.array(array_diff, dtype=[('freq', 'i4'), ('phase_deg', 'f4'),
-                                             ('time_ns', 'f4')])
+    array_diff = np.array(
+        array_diff, dtype=[
+            ('freq', 'i4'), ('phase_deg', 'f4'), ('time_ns', 'f4')])
 
     array_diff = unwrap_phase(array_diff)
 
@@ -213,9 +252,25 @@ def main():
         array_diff.tofile(plot_location + path_type + time_file_str, sep="\n")
     if time_file_loc != 'None':
         for ant, array in all_data.items():
-            array.tofile(plot_location + time_file_loc + path_type + ant + '.txt', sep="\n")
-        combined_main_array.tofile(plot_location + time_file_loc + path_type + 'main_array_combined.txt', sep="\n")
-        combined_intf_array.tofile(plot_location + time_file_loc + path_type + 'intf_array_combined.txt', sep="\n")
+            array.tofile(
+                plot_location +
+                time_file_loc +
+                path_type +
+                ant +
+                '.txt',
+                sep="\n")
+        combined_main_array.tofile(
+            plot_location +
+            time_file_loc +
+            path_type +
+            'main_array_combined.txt',
+            sep="\n")
+        combined_intf_array.tofile(
+            plot_location +
+            time_file_loc +
+            path_type +
+            'intf_array_combined.txt',
+            sep="\n")
     # PLOTTING
 
     numplots = 6
@@ -223,47 +278,84 @@ def main():
     xmin, xmax, ymin, ymax = smpplot[0].axis(xmin=8e6, xmax=20e6)
     smpplot[numplots - 1].set_xlabel('Frequency (Hz)')
     smpplot[0].set_title(plot_title, fontsize=30)
-    smpplot[0].plot(combined_main_array['freq'], combined_main_array['phase_deg'] % 360.0,
-                    color=hex_dictionary['M0'], label='Main Array')
-    smpplot[1].plot(combined_main_array['freq'], combined_main_array['magnitude'],
-                    color=hex_dictionary['M0'], label='Main Array')
-    smpplot[0].plot(combined_intf_array['freq'], combined_intf_array['phase_deg'] % 360.0,
-                    color=hex_dictionary['I0'], label='Intf Array')
-    smpplot[1].plot(combined_intf_array['freq'], combined_intf_array['magnitude'],
-                    color=hex_dictionary['I0'], label='Intf Array')
+    smpplot[0].plot(
+        combined_main_array['freq'],
+        combined_main_array['phase_deg'] %
+        360.0,
+        color=hex_dictionary['M0'],
+        label='Main Array')
+    smpplot[1].plot(
+        combined_main_array['freq'],
+        combined_main_array['magnitude'],
+        color=hex_dictionary['M0'],
+        label='Main Array')
+    smpplot[0].plot(
+        combined_intf_array['freq'],
+        combined_intf_array['phase_deg'] %
+        360.0,
+        color=hex_dictionary['I0'],
+        label='Intf Array')
+    smpplot[1].plot(
+        combined_intf_array['freq'],
+        combined_intf_array['magnitude'],
+        color=hex_dictionary['I0'],
+        label='Intf Array')
 
-    smpplot[0].set_ylabel('Transmitter Phase Path of\nArrays [degrees]')  # from antenna to feedline end at building.
-    smpplot[1].set_ylabel('Combined\nArray [dB]')  # referenced to power at a single antenna
+    # from antenna to feedline end at building.
+    smpplot[0].set_ylabel('Transmitter Phase Path of\nArrays [degrees]')
+    # referenced to power at a single antenna
+    smpplot[1].set_ylabel('Combined\nArray [dB]')
 
     for plot in range(0, numplots):
         smpplot[plot].grid()
     print("plotting")
     smpplot[2].plot(array_diff['freq'], array_diff['phase_deg'])
-    smpplot[2].set_ylabel('Transmitter Path\nDifference Between\nArrays [degrees]')
+    smpplot[2].set_ylabel(
+        'Transmitter Path\nDifference Between\nArrays [degrees]')
 
     for ant, dataset in all_data.items():
-        if ant[0] == 'M': # plot with main array
-            smpplot[3].plot(dataset['freq'], linear_fit_dict[ant]['offset_of_best_fit'] * 180.0 / math.pi,
-                            label='{}, delay={} ns'.format(ant,
-                                                           linear_fit_dict[ant]['time_delay_ns']),
-                            color=hex_dictionary[ant])
+        if ant[0] == 'M':  # plot with main array
+            smpplot[3].plot(
+                dataset['freq'],
+                linear_fit_dict[ant]['offset_of_best_fit'] *
+                180.0 /
+                math.pi,
+                label='{}, delay={} ns'.format(
+                    ant,
+                    linear_fit_dict[ant]['time_delay_ns']),
+                color=hex_dictionary[ant])
         elif ant[0] == 'I':
-            smpplot[4].plot(dataset['freq'], linear_fit_dict[ant]['offset_of_best_fit'] * 180.0 / math.pi,
-                            label='{}, delay={} ns'.format(ant,
-                                                           linear_fit_dict[ant]['time_delay_ns']),
-                            color=hex_dictionary[ant])
+            smpplot[4].plot(
+                dataset['freq'],
+                linear_fit_dict[ant]['offset_of_best_fit'] *
+                180.0 /
+                math.pi,
+                label='{}, delay={} ns'.format(
+                    ant,
+                    linear_fit_dict[ant]['time_delay_ns']),
+                color=hex_dictionary[ant])
 
-    smpplot[3].plot(all_data['M0']['freq'], linear_fit_dict['M_all']['offset_of_best_fit'] * 180.0 / math.pi,
-                    color=hex_dictionary['other'], label='Combined Main, delay={} ns'.format(linear_fit_dict['M_all']['time_delay_ns']))  # plot last
-    smpplot[4].plot(all_data['M0']['freq'], linear_fit_dict['I_all']['offset_of_best_fit'] * 180.0 / math.pi,
-                    color=hex_dictionary['other'], label='Combined Intf, delay={} ns'.format(linear_fit_dict['I_all']['time_delay_ns']))  # plot last
-
+    smpplot[3].plot(
+        all_data['M0']['freq'],
+        linear_fit_dict['M_all']['offset_of_best_fit'] * 180.0 / math.pi,
+        color=hex_dictionary['other'],
+        label='Combined Main, delay={} ns'.format(
+            linear_fit_dict['M_all']['time_delay_ns']))  # plot last
+    smpplot[4].plot(
+        all_data['M0']['freq'],
+        linear_fit_dict['I_all']['offset_of_best_fit'] * 180.0 / math.pi,
+        color=hex_dictionary['other'],
+        label='Combined Intf, delay={} ns'.format(
+            linear_fit_dict['I_all']['time_delay_ns']))  # plot last
 
     smpplot[3].legend(fontsize=10, ncol=4)
     smpplot[4].legend(fontsize=12)
-    smpplot[3].set_ylabel('Transmitter Main Phase Offset\n from Own Line of Best\nFit [degrees]')
-    smpplot[4].set_ylabel('Cable-Compensation Intf Phase Offset\n from Own Line of Best\nFit [degrees]')
-    smpplot[5].set_ylabel('Perceived Time\nDifference b/w arrays\n Based on Phase [ns]')
+    smpplot[3].set_ylabel(
+        'Transmitter Main Phase Offset\n from Own Line of Best\nFit [degrees]')
+    smpplot[4].set_ylabel(
+        'Cable-Compensation Intf Phase Offset\n from Own Line of Best\nFit [degrees]')
+    smpplot[5].set_ylabel(
+        'Perceived Time\nDifference b/w arrays\n Based on Phase [ns]')
     smpplot[5].plot(array_diff['freq'], array_diff['time_ns'])
 
     if missing_data:  # not empty
