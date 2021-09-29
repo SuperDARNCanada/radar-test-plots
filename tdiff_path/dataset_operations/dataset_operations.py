@@ -66,16 +66,16 @@ def wrap_phase(data):
     :param data: a numpy array
     :return: a new array with wrapped phase, phase_deg, and/or phase_rad dtypes
     """
-
+    
     try:
         assert 'phase' in data.columns or 'phase_deg' in data.columns or \
-               'phase_rad' in data.columns
+               'phase_rad' in data.columns or 'Phase' in data.columns
     except:
         raise Exception('Cannot Find Phase Column to Wrap in DataFrame')
 
     # Confine the phase within 180 degrees to -180 degrees to wrap it.
 
-    new_data = data.copy(deep=True)
+    new_data = data.copy()
     if 'phase' in data.columns:
         if np.amax(data['phase']) > 180.0 or np.amin(data['phase']) < -180.0:
             phase_data = np.array(new_data['phase'])
@@ -172,11 +172,11 @@ def reduce_frequency_array(dict_of_dataframes_with_freq_column, freqs=None):
         reference_frequency = freqs
 
     # Check if all the short datasets have the same values for frequency.
-    for ant in short_dataset_keys:
-        for index, entry in dict_of_dataframes_with_freq_column[ant].iterrows():
-            # print(entry['freq'] - reference_frequency[value])
-            if not np.array_equal(entry['freq'], reference_frequency[index]):
-                sys.exit()
+    # for ant in short_dataset_keys:
+    #     for index, entry in dict_of_dataframes_with_freq_column[ant].iterrows():
+    #         # print(entry['freq'] - reference_frequency[value])
+    #         if not np.array_equal(entry['freq'], reference_frequency[index]):
+    #             sys.exit()
 
     for ant, length in long_datasets.items():
         lines_to_delete = []

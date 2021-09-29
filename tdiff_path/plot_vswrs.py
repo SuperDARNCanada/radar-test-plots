@@ -5,6 +5,7 @@
 # differences between the antennas.
 
 import sys
+import io
 import fnmatch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -59,13 +60,19 @@ def main():
         if v == 'dne':
             missing_data.append(ant)
             continue
-        with open(data_location + v, 'r') as csvfile:
+
+        # Edit (Adam): The ZVH .csv files are in format cp1252 not utf-8 so using the
+        #              regular python open() will break; use io.open().
+        with io.open(data_location + v, 'r', encoding='cp1252') as csvfile:
             for line in csvfile:
                 # skip to header
-                if fnmatch.fnmatch(line, 'Freq [Hz*') or fnmatch.fnmatch(line, 'Frequency [Hz*'):
+                if fnmatch.fnmatch(line, 'Freq [Hz*') or \
+                    fnmatch.fnmatch(line, 'Frequency [Hz*') or \
+                    fnmatch.fnmatch(line, 'Freq. [Hz*'):
                     break
             else:  # no break
                 sys.exit('No data in file {}\n'.format(v))
+            
             row = line.split(',')
             try:
                 freq_header = 'Freq*'
@@ -96,7 +103,7 @@ def main():
                 try:
                     freq = float(row[freq_column])
                     vswr = float(row[vswr_column])
-                    phase = float(row[phase_column])
+                    phase = float(row[phase_columns])
                     data.append((freq, vswr, phase))
                 except:
                     continue
