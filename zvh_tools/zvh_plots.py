@@ -1,3 +1,19 @@
+"""
+SuperDARN Canada© -- Engineering Diagnostic Tools Kit: (Rohde & Schwarz Data Plotting)
+
+Author: Adam Lozinsky
+Date: October 6, 2021
+Affiliation: University of Saskatchewan
+
+Typically SuperDARN engineers will make a series of measurements for each antennas RF path using a
+Rhode & Schwarz ZVH or similar spectrum analyzer. These measurements can be converted into .csv files.
+The files contain different data based on the instrument settings, but it is per antenna. It is preferred
+to plot all the data for each antenna on one plot so differences and outliers are easily visible. This tool
+will produce those common plots from the .csv files.
+
+Use 'python zvh_tools.py --help' to discover options if running directly from command line.
+"""
+
 from dataclasses import dataclass, field
 import argparse
 import glob
