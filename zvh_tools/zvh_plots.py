@@ -27,6 +27,27 @@ class RSAllData:
 
 
 def read_data(directory, pattern, verbose=False, site=''):
+    """
+    Load the Rohde & Schwarz data from .csv files from either a parent directory given a file pattern or from a
+    directory directly. The data is then loaded into a dataclass and returned for further processing.
+
+    Parameters
+    ----------
+        directory : str
+            The directory or parent directory containing the .csv files.
+        pattern : str
+            The file naming pattern of files to load; eg. rkn_vswr would yield all rkn_vswr*.csv in directory tree.
+        verbose : bool
+            True will print more information about whats going on, False squelches.
+        site : str
+            Name of the site the data was taken from; used in naming plots and plot titles.
+
+    Returns
+    -------
+        all_data : dataclass
+            A dataclass containing all the data for each antenna from the Rohde & Schwarz .csv files.
+    """
+
     files = glob.glob(directory + '/*/' + pattern + '*.csv')
     if files == []:
         files = glob.glob(directory + pattern + '*.csv')
@@ -80,6 +101,21 @@ def read_data(directory, pattern, verbose=False, site=''):
 
 
 def plot_rx_path(data, directory=''):
+    """
+    Create a plot of frequency vs. magnitude and frequency vs. phase for each antenna receive path.
+
+    Parameters
+    ----------
+        data : dataclass
+            A dataclass containing Rohde & Schwarz ZVH measured data; must contain vswr and frequency.
+        directory : str
+            The output file directory to save the plot in.
+
+    Returns
+    -------
+        None
+    """
+
     # Pretty plot configuration.
     from matplotlib import rc
     rc('font', **{'family': 'serif', 'serif': ['DejaVu Serif']})
@@ -137,6 +173,21 @@ def plot_rx_path(data, directory=''):
 
 
 def plot_vswr(data, directory=''):
+    """
+    Create a plot of frequency vs. voltage standing wave ratio (vswr) for each antenna.
+
+    Parameters
+    ----------
+        data : dataclass
+            A dataclass containing Rohde & Schwarz ZVH measured data; must contain vswr and frequency.
+        directory : str
+            The output file directory to save the plot in.
+
+    Returns
+    -------
+        None
+    """
+
     # Pretty plot configuration.
     from matplotlib import rc
     rc('font', **{'family': 'serif', 'serif': ['DejaVu Serif']})
